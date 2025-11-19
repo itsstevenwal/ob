@@ -52,12 +52,11 @@ impl<T: OrderInterface> Level<T> {
 
     /// Removes an order by its pointer
     /// Returns the removed order if found, None otherwise
-    pub fn remove_order(&mut self, node_ptr: *mut crate::list::Node<T>) -> Option<T> {
+    pub fn remove_order(&mut self, node_ptr: *mut crate::list::Node<T>) {
         let removed = self.orders.remove(node_ptr);
         if let Some(ref order) = removed {
             self.total_quantity -= order.quantity();
         }
-        removed
     }
 
     /// Returns an iterator over the orders at this level
@@ -114,8 +113,7 @@ mod tests {
         let node_ptr = level.add_order(BasicOrder::new("2", true, 100, 30));
         level.add_order(BasicOrder::new("3", true, 100, 20));
 
-        let removed = level.remove_order(node_ptr);
-        assert_eq!(removed, Some(BasicOrder::new("2", true, 100, 30)));
+        level.remove_order(node_ptr);
         assert_eq!(level.total_quantity(), 70);
         assert_eq!(level.order_count(), 2);
     }
@@ -126,8 +124,7 @@ mod tests {
         level.add_order(BasicOrder::new("1", true, 50, 50));
 
         let null_ptr = std::ptr::null_mut();
-        let removed = level.remove_order(null_ptr);
-        assert_eq!(removed, None);
+        level.remove_order(null_ptr);
         assert_eq!(level.total_quantity(), 50);
         assert_eq!(level.order_count(), 1);
     }

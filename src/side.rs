@@ -52,11 +52,18 @@ impl<T: OrderInterface> Side<T> {
 
     pub fn remove_order(&mut self, node_ptr: *mut Node<T>) {
         let price = unsafe { (*node_ptr).data.price() };
-        if let Some(level_ptr) = self.map.get(&price) {
+
+        let remove_tree = if let Some(level_ptr) = self.map.get(&price) {
             let l = unsafe { &mut *(*level_ptr) };
             l.remove_order(node_ptr);
+            l.is_empty()
         } else {
             panic!("order not found");
+        };
+
+        if remove_tree {
+            self.map.remove(&price);
+            self.levels.remove(&price);
         }
     }
 
