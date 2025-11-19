@@ -130,12 +130,7 @@ impl<T> Default for List<T> {
 
 impl<T> Drop for List<T> {
     fn drop(&mut self) {
-        while let Some(_) = self.pop_front() {
-            // // Deallocate the node
-            // unsafe {
-            //     let _ = Box::from_raw(node_ptr);
-            // }
-        }
+        while let Some(_) = self.pop_front() {}
     }
 }
 

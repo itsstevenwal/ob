@@ -53,13 +53,23 @@ impl<T: OrderInterface> Side<T> {
         }
     }
 
-    // pub fn fill_order(&mut self, node_ptr: *mut Node<T>, fill: u64) {
-    //     let price = unsafe { (*node_ptr).data.price() };
-    //     if let Some(level_ptr) = self.map.get(&price) {
-    //         let level = unsafe { &mut *(*level_ptr) };
-    //         level.fill_order(node_ptr, fill);
-    //     }
-    // }
+    pub fn fill_order(&mut self, node_ptr: *mut Node<T>, price: u64, fill: u64) -> bool {
+        let (removed, remove_tree) = if let Some(level_ptr) = self.map.get(&price) {
+            let level = unsafe { &mut *(*level_ptr) };
+            let removed = level.fill_order(node_ptr, fill);
+
+            (removed, level.is_empty())
+        } else {
+            panic!("order not found");
+        };
+
+        if remove_tree {
+            self.map.remove(&price);
+            self.levels.remove(&price);
+        }
+
+        removed
+    }
 
     pub fn remove_order(&mut self, node_ptr: *mut Node<T>) {
         let price = unsafe { (*node_ptr).data.price() };

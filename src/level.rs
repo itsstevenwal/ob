@@ -50,6 +50,21 @@ impl<T: OrderInterface> Level<T> {
         self.orders.push_back(order)
     }
 
+    /// Fills an order and returns true if the order is fully filled
+    /// and should be removed from the level
+    pub fn fill_order(&mut self, node_ptr: *mut crate::list::Node<T>, fill: u64) -> bool {
+        let order = unsafe { &mut (*node_ptr).data };
+        order.fill(fill);
+        self.total_quantity -= fill;
+
+        if order.remaining() == 0 {
+            self.remove_order(node_ptr);
+            return true;
+        }
+
+        false
+    }
+
     /// Removes an order by its pointer
     /// Returns the removed order if found, None otherwise
     pub fn remove_order(&mut self, node_ptr: *mut crate::list::Node<T>) {

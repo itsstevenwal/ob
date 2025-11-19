@@ -37,7 +37,8 @@ impl<T: OrderInterface> Orderbook<T> {
     /// Any remaining quantity is added to the appropriate side
     pub fn insert_order(&mut self, price: u64, mut order: T) {
         let mut remaining_quantity = order.remaining();
-        let mut fill_quantity = 0;
+        let mut taker_quantity = 0;
+        let mut maker_quantities = Vec::new();
         let is_buy = order.is_buy();
 
         let check_fn = if is_buy {
@@ -49,7 +50,6 @@ impl<T: OrderInterface> Orderbook<T> {
         };
 
         // Match against the opposite side and collect orders to remove
-        let mut to_remove = Vec::new();
 
         let opposite_book = if is_buy {
             &mut self.asks
@@ -58,36 +58,34 @@ impl<T: OrderInterface> Orderbook<T> {
         };
 
         for resting_order in opposite_book.iter_mut() {
-            if check_fn(price, resting_order) {
-                if resting_order.remaining() > remaining_quantity {
-                    // Resting order has more remaining quantity, fill the order and break
-                    let taken_quantity = remaining_quantity;
-                    remaining_quantity = 0;
-                    resting_order.fill(taken_quantity);
-                    break;
-                } else {
-                    // Resting order has less remaining quantity, fill the order and remove the resting order
-                    let taken_quantity = resting_order.remaining();
-                    remaining_quantity -= taken_quantity;
-                    fill_quantity += taken_quantity;
+            if check_fn(price, resting_order) && remaining_quantity > 0 {
+                let taken_quantity = remaining_quantity.min(resting_order.remaining());
+                remaining_quantity -= taken_quantity;
 
-                    to_remove.push(resting_order.id().to_string());
-                }
-            } else {
-                break;
+                taker_quantity += taken_quantity;
+                maker_quantities.push((resting_order.id(), taken_quantity));
+
+                continue;
             }
+
+            // Stop matching
+            break;
         }
 
-        for order_id in to_remove {
-            if let Some(&node_ptr) = self.orders.get(&order_id) {
-                opposite_book.remove_order(node_ptr);
-                self.orders.remove(&order_id);
-            }
-        }
+        // // Handle the maker quantities
+        // for (order_id, quantity) in maker_quantities {
+        //     if let Some(node_ptr) = self.orders.get(order_id) {
+        //         let removed = opposite_book.fill_order(*node_ptr, price, quantity);
+        //         if removed {
+        //             self.opposite_book.remove_order(*node_ptr);
+        //             self.orders.remove(order_id);
+        //         }
+        //     }
+        // }
 
         // Add remaining quantity to the appropriate side
         if remaining_quantity > 0 {
-            order.fill(fill_quantity);
+            order.fill(taker_quantity);
             let id = order.id().to_string();
             let node_ptr = if is_buy {
                 self.bids.insert_order(order)
