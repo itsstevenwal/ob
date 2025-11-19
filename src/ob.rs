@@ -4,7 +4,6 @@ use crate::side::Side;
 use std::collections::HashMap;
 
 /// Represents a complete orderbook with bid and ask sides
-#[derive(Default)]
 pub struct Orderbook<T: OrderInterface> {
     /// The bid side (buy orders)
     bids: Side<T>,
@@ -12,6 +11,16 @@ pub struct Orderbook<T: OrderInterface> {
     asks: Side<T>,
 
     orders: HashMap<String, *mut Node<T>>,
+}
+
+impl<T: OrderInterface> Default for Orderbook<T> {
+    fn default() -> Self {
+        Self {
+            bids: Side::new(true),
+            asks: Side::new(false),
+            orders: HashMap::new(),
+        }
+    }
 }
 
 // Add Order – O(log M) for the first order at a limit, O(1) for all others, where M is the number of price Limits (generally << N the number of orders).

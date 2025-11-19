@@ -1,4 +1,4 @@
-use crate::list::List;
+use crate::list::{Iter, IterMut, List};
 use crate::order::OrderInterface;
 
 /// Represents a price level in the orderbook
@@ -60,120 +60,14 @@ impl<T: OrderInterface> Level<T> {
         removed
     }
 
-    /// Removes the first order (FIFO) from this level
-    /// Returns the removed order if the level is not empty, None otherwise
-    pub fn remove_first_order(&mut self) -> Option<T> {
-        let node_ptr = self.orders.pop_front()?;
-        unsafe {
-            let boxed_node = Box::from_raw(node_ptr);
-            let order = boxed_node.data;
-            self.total_quantity -= order.quantity();
-            Some(order)
-        }
+    /// Returns an iterator over the orders at this level
+    pub fn iter(&self) -> Iter<'_, T> {
+        self.orders.iter()
     }
 
-    /// Removes the last order from this level
-    /// Returns the removed order if the level is not empty, None otherwise
-    pub fn remove_last_order(&mut self) -> Option<T> {
-        let node_ptr = self.orders.pop_back()?;
-        unsafe {
-            let boxed_node = Box::from_raw(node_ptr);
-            let order = boxed_node.data;
-            self.total_quantity -= order.quantity();
-            Some(order)
-        }
-    }
-
-    /// Gets a reference to the first order without removing it
-    pub fn first_order(&self) -> Option<&T> {
-        self.orders.front()
-    }
-
-    /// Gets a mutable reference to the first order without removing it
-    pub fn first_order_mut(&mut self) -> Option<&mut T> {
-        self.orders.front_mut()
-    }
-
-    /// Gets a reference to the last order without removing it
-    pub fn last_order(&self) -> Option<&T> {
-        self.orders.back()
-    }
-
-    /// Gets a mutable reference to the last order without removing it
-    pub fn last_order_mut(&mut self) -> Option<&mut T> {
-        self.orders.back_mut()
-    }
-
-    /// Reduces the quantity of an order by the specified amount
-    /// If the quantity becomes zero or negative, the order is removed
-    /// Returns the actual quantity reduced (may be less than requested if order quantity is less)
-    pub fn reduce_order_quantity(&mut self, order_id: &str, quantity: u64) -> Option<u64> {
-        // Find the order and reduce its quantity
-        // Since we can't easily iterate and mutate, we'll need to remove and re-add
-        // For better performance, we could use a different approach, but this works
-        let mut found = false;
-        let mut actual_reduction = 0u64;
-
-        // We need to find the order, modify it, and put it back
-        // This is a limitation of the current List API - we can't easily find and modify
-        // For now, we'll use a simple approach: remove, modify, re-add
-        let mut orders_to_keep = List::new();
-        let mut found_order = None;
-
-        while let Some(node_ptr) = self.orders.pop_front() {
-            unsafe {
-                let boxed_node = Box::from_raw(node_ptr);
-                let order = boxed_node.data;
-
-                if order.id() == order_id && !found {
-                    found = true;
-                    if order.quantity() > quantity {
-                        // Reduce quantity
-                        actual_reduction = quantity;
-                        let mut modified = order;
-                        modified.fill(quantity);
-                        found_order = Some(modified);
-                    } else {
-                        // Remove order entirely
-                        actual_reduction = order.quantity();
-                        found_order = None;
-                    }
-                } else {
-                    orders_to_keep.push_back(order);
-                }
-            }
-        }
-
-        // Rebuild the orders list
-        while let Some(node_ptr) = orders_to_keep.pop_front() {
-            unsafe {
-                let boxed_node = Box::from_raw(node_ptr);
-                self.orders.push_back(boxed_node.data);
-            }
-        }
-
-        if let Some(order) = found_order {
-            self.orders.push_back(order);
-        }
-
-        if found {
-            self.total_quantity -= actual_reduction;
-            Some(actual_reduction)
-        } else {
-            None
-        }
-    }
-
-    /// Clears all orders from this level
-    pub fn clear(&mut self) {
-        self.orders.clear();
-        self.total_quantity = 0;
-    }
-}
-
-impl<T: OrderInterface> Default for Level<T> {
-    fn default() -> Self {
-        Self::new(0)
+    /// Returns a mutable iterator over the orders at this level
+    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+        self.orders.iter_mut()
     }
 }
 
@@ -194,7 +88,7 @@ mod tests {
     #[test]
     fn test_add_order() {
         let mut level = Level::<BasicOrder>::new(100);
-        let order = BasicOrder::new("1", true, 50);
+        let order = BasicOrder::new("1", true, 100, 50);
 
         level.add_order(order);
         assert_eq!(level.total_quantity(), 50);
@@ -205,23 +99,23 @@ mod tests {
     #[test]
     fn test_add_multiple_orders() {
         let mut level = Level::<BasicOrder>::new(100);
-        level.add_order(BasicOrder::new("1", true, 50));
-        level.add_order(BasicOrder::new("2", true, 30));
-        level.add_order(BasicOrder::new("3", true, 20));
+        level.add_order(BasicOrder::new("1", true, 100, 50));
+        level.add_order(BasicOrder::new("2", true, 100, 30));
+        level.add_order(BasicOrder::new("3", true, 100, 20));
 
         assert_eq!(level.total_quantity(), 100);
         assert_eq!(level.order_count(), 3);
     }
 
     #[test]
-    fn test_remove_order_by_id() {
+    fn test_remove_order() {
         let mut level = Level::<BasicOrder>::new(100);
-        level.add_order(BasicOrder::new("1", true, 50));
-        let node_ptr = level.add_order(BasicOrder::new("2", true, 30));
-        level.add_order(BasicOrder::new("3", true, 20));
+        level.add_order(BasicOrder::new("1", true, 100, 50));
+        let node_ptr = level.add_order(BasicOrder::new("2", true, 100, 30));
+        level.add_order(BasicOrder::new("3", true, 100, 20));
 
         let removed = level.remove_order(node_ptr);
-        assert_eq!(removed, Some(BasicOrder::new("2", true, 30)));
+        assert_eq!(removed, Some(BasicOrder::new("2", true, 100, 30)));
         assert_eq!(level.total_quantity(), 70);
         assert_eq!(level.order_count(), 2);
     }
@@ -229,97 +123,12 @@ mod tests {
     #[test]
     fn test_remove_nonexistent_order() {
         let mut level = Level::<BasicOrder>::new(100);
-        level.add_order(BasicOrder::new("1", true, 50));
+        level.add_order(BasicOrder::new("1", true, 50, 50));
 
         let null_ptr = std::ptr::null_mut();
         let removed = level.remove_order(null_ptr);
         assert_eq!(removed, None);
         assert_eq!(level.total_quantity(), 50);
         assert_eq!(level.order_count(), 1);
-    }
-
-    #[test]
-    fn test_remove_first_order() {
-        let mut level = Level::<BasicOrder>::new(100);
-        level.add_order(BasicOrder::new("1", true, 50));
-        level.add_order(BasicOrder::new("2", true, 30));
-
-        let removed = level.remove_first_order();
-        assert_eq!(removed, Some(BasicOrder::new("1", true, 50)));
-        assert_eq!(level.total_quantity(), 30);
-        assert_eq!(level.order_count(), 1);
-    }
-
-    #[test]
-    fn test_remove_last_order() {
-        let mut level = Level::<BasicOrder>::new(100);
-        level.add_order(BasicOrder::new("1", true, 50));
-        level.add_order(BasicOrder::new("2", true, 30));
-
-        let removed = level.remove_last_order();
-        assert_eq!(removed, Some(BasicOrder::new("2", true, 30)));
-        assert_eq!(level.total_quantity(), 50);
-        assert_eq!(level.order_count(), 1);
-    }
-
-    #[test]
-    fn test_first_order() {
-        let mut level = Level::<BasicOrder>::new(100);
-        level.add_order(BasicOrder::new("1", true, 50));
-        level.add_order(BasicOrder::new("2", true, 30));
-
-        let first = level.first_order();
-        assert_eq!(first, Some(&BasicOrder::new("1", true, 50)));
-        assert_eq!(level.order_count(), 2); // Should not remove
-    }
-
-    #[test]
-    fn test_reduce_order_quantity() {
-        let mut level = Level::<BasicOrder>::new(100);
-        level.add_order(BasicOrder::new("1", true, 50));
-        level.add_order(BasicOrder::new("2", true, 30));
-
-        let reduced = level.reduce_order_quantity("1", 20);
-        assert_eq!(reduced, Some(20));
-        assert_eq!(level.total_quantity(), 60);
-        assert_eq!(level.order_count(), 2);
-
-        let first = level.first_order();
-        assert_eq!(first, Some(&BasicOrder::new("1", true, 30)));
-    }
-
-    #[test]
-    fn test_reduce_order_quantity_to_zero() {
-        let mut level = Level::<BasicOrder>::new(100);
-        level.add_order(BasicOrder::new("1", true, 50));
-        level.add_order(BasicOrder::new("2", true, 30));
-
-        let reduced = level.reduce_order_quantity("1", 50);
-        assert_eq!(reduced, Some(50));
-        assert_eq!(level.total_quantity(), 30);
-        assert_eq!(level.order_count(), 1);
-    }
-
-    #[test]
-    fn test_reduce_order_quantity_more_than_available() {
-        let mut level = Level::<BasicOrder>::new(100);
-        level.add_order(BasicOrder::new("1", true, 50));
-
-        let reduced = level.reduce_order_quantity("1", 100);
-        assert_eq!(reduced, Some(50));
-        assert_eq!(level.total_quantity(), 0);
-        assert_eq!(level.order_count(), 0);
-    }
-
-    #[test]
-    fn test_clear() {
-        let mut level = Level::<BasicOrder>::new(100);
-        level.add_order(BasicOrder::new("1", true, 50));
-        level.add_order(BasicOrder::new("2", true, 30));
-
-        level.clear();
-        assert_eq!(level.total_quantity(), 0);
-        assert_eq!(level.order_count(), 0);
-        assert!(level.is_empty());
     }
 }

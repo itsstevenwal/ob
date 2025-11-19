@@ -44,26 +44,6 @@ impl<T> List<T> {
         self.length == 0
     }
 
-    /// Adds an element to the front of the list
-    /// Returns the pointer address of the newly inserted node
-    pub fn push_front(&mut self, data: T) -> *mut Node<T> {
-        let new_node = Box::into_raw(Node::new(data));
-
-        unsafe {
-            if self.head.is_null() {
-                // Empty list
-                self.tail = new_node;
-            } else {
-                (*self.head).prev = new_node;
-                (*new_node).next = self.head;
-            }
-            self.head = new_node;
-        }
-
-        self.length += 1;
-        new_node
-    }
-
     /// Adds an element to the back of the list
     /// Returns the pointer address of the newly inserted node
     pub fn push_back(&mut self, data: T) -> *mut Node<T> {
@@ -87,7 +67,7 @@ impl<T> List<T> {
     /// Removes and returns the pointer address from the front of the list
     /// Returns None if the list is empty
     /// Note: The caller is responsible for deallocating the node if needed
-    pub fn pop_front(&mut self) -> Option<*mut Node<T>> {
+    fn pop_front(&mut self) -> Option<*mut Node<T>> {
         if self.head.is_null() {
             return None;
         }
@@ -105,75 +85,6 @@ impl<T> List<T> {
 
             self.length -= 1;
             Some(old_head)
-        }
-    }
-
-    /// Removes and returns the pointer address from the back of the list
-    /// Returns None if the list is empty
-    /// Note: The caller is responsible for deallocating the node if needed
-    pub fn pop_back(&mut self) -> Option<*mut Node<T>> {
-        if self.tail.is_null() {
-            return None;
-        }
-
-        unsafe {
-            let old_tail = self.tail;
-            self.tail = (*old_tail).prev;
-
-            if self.tail.is_null() {
-                // This was the only node
-                self.head = ptr::null_mut();
-            } else {
-                (*self.tail).next = ptr::null_mut();
-            }
-
-            self.length -= 1;
-            Some(old_tail)
-        }
-    }
-
-    /// Returns a reference to the front element without removing it
-    pub fn front(&self) -> Option<&T> {
-        if self.head.is_null() {
-            None
-        } else {
-            unsafe { Some(&(*self.head).data) }
-        }
-    }
-
-    /// Returns a mutable reference to the front element without removing it
-    pub fn front_mut(&mut self) -> Option<&mut T> {
-        if self.head.is_null() {
-            None
-        } else {
-            unsafe { Some(&mut (*self.head).data) }
-        }
-    }
-
-    /// Returns a reference to the back element without removing it
-    pub fn back(&self) -> Option<&T> {
-        if self.tail.is_null() {
-            None
-        } else {
-            unsafe { Some(&(*self.tail).data) }
-        }
-    }
-
-    /// Returns a mutable reference to the back element without removing it
-    pub fn back_mut(&mut self) -> Option<&mut T> {
-        if self.tail.is_null() {
-            None
-        } else {
-            unsafe { Some(&mut (*self.tail).data) }
-        }
-    }
-
-    /// Removes all elements from the list
-    pub fn clear(&mut self) {
-        while let Some(node_ptr) = self.pop_front() {
-            unsafe {
-                let _ = Box::from_raw(node_ptr);
-            }
         }
     }
 
@@ -219,15 +130,11 @@ impl<T> Default for List<T> {
 
 impl<T> Drop for List<T> {
     fn drop(&mut self) {
-        while let Some(node_ptr) = self.pop_front() {
-            unsafe {
-                let _ = Box::from_raw(node_ptr);
-            }
-        }
+        while let Some(_) = self.pop_front() {}
     }
 }
 
-/// An iterator over the doubly linked list
+/// An iterator over the doubly linked list that consumes the list
 pub struct IntoIter<T>(List<T>);
 
 impl<T> Iterator for IntoIter<T> {
@@ -241,10 +148,71 @@ impl<T> Iterator for IntoIter<T> {
     }
 }
 
+/// An iterator over the doubly linked list that borrows the list
+pub struct Iter<'a, T> {
+    current: *mut Node<T>,
+    _marker: std::marker::PhantomData<&'a T>,
+}
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current.is_null() {
+            return None;
+        }
+
+        unsafe {
+            let data = &(*self.current).data;
+            self.current = (*self.current).next;
+            Some(data)
+        }
+    }
+}
+
+/// A mutable iterator over the doubly linked list that borrows the list mutably
+pub struct IterMut<'a, T> {
+    current: *mut Node<T>,
+    _marker: std::marker::PhantomData<&'a mut T>,
+}
+
+impl<'a, T> Iterator for IterMut<'a, T> {
+    type Item = &'a mut T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current.is_null() {
+            return None;
+        }
+
+        unsafe {
+            let data = &mut (*self.current).data;
+            let next = (*self.current).next;
+            self.current = next;
+            Some(data)
+        }
+    }
+}
+
 impl<T> List<T> {
     /// Consumes the list and returns an iterator over its elements
     pub fn into_iter(self) -> IntoIter<T> {
         IntoIter(self)
+    }
+
+    /// Returns an iterator over the list that borrows the list
+    pub fn iter(&self) -> Iter<'_, T> {
+        Iter {
+            current: self.head,
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    /// Returns a mutable iterator over the list that borrows the list mutably
+    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+        IterMut {
+            current: self.head,
+            _marker: std::marker::PhantomData,
+        }
     }
 }
 
@@ -260,17 +228,6 @@ mod tests {
     }
 
     #[test]
-    fn test_push_front() {
-        let mut list = List::new();
-        list.push_front(1);
-        list.push_front(2);
-        list.push_front(3);
-
-        assert_eq!(list.len(), 3);
-        assert_eq!(*list.front().unwrap(), 3);
-    }
-
-    #[test]
     fn test_push_back() {
         let mut list = List::new();
         list.push_back(1);
@@ -278,7 +235,7 @@ mod tests {
         list.push_back(3);
 
         assert_eq!(list.len(), 3);
-        assert_eq!(*list.back().unwrap(), 3);
+        assert_eq!(list.iter().last().unwrap(), &3);
     }
 
     #[test]
@@ -311,73 +268,6 @@ mod tests {
     }
 
     #[test]
-    fn test_pop_back() {
-        let mut list = List::new();
-        list.push_back(1);
-        list.push_back(2);
-        list.push_back(3);
-
-        let node1 = list.pop_back().unwrap();
-        assert_eq!(unsafe { (*node1).data }, 3);
-        unsafe {
-            let _ = Box::from_raw(node1);
-        }
-
-        let node2 = list.pop_back().unwrap();
-        assert_eq!(unsafe { (*node2).data }, 2);
-        unsafe {
-            let _ = Box::from_raw(node2);
-        }
-
-        let node3 = list.pop_back().unwrap();
-        assert_eq!(unsafe { (*node3).data }, 1);
-        unsafe {
-            let _ = Box::from_raw(node3);
-        }
-
-        assert_eq!(list.pop_back(), None);
-        assert!(list.is_empty());
-    }
-
-    #[test]
-    fn test_front_and_back() {
-        let mut list = List::new();
-        list.push_back(1);
-        list.push_back(2);
-        list.push_back(3);
-
-        assert_eq!(*list.front().unwrap(), 1);
-        assert_eq!(*list.back().unwrap(), 3);
-        assert_eq!(list.len(), 3); // Should not consume
-    }
-
-    #[test]
-    fn test_front_mut_and_back_mut() {
-        let mut list = List::new();
-        list.push_back(1);
-        list.push_back(2);
-        list.push_back(3);
-
-        *list.front_mut().unwrap() = 10;
-        *list.back_mut().unwrap() = 30;
-
-        assert_eq!(*list.front().unwrap(), 10);
-        assert_eq!(*list.back().unwrap(), 30);
-    }
-
-    #[test]
-    fn test_clear() {
-        let mut list = List::new();
-        list.push_back(1);
-        list.push_back(2);
-        list.push_back(3);
-
-        list.clear();
-        assert!(list.is_empty());
-        assert_eq!(list.len(), 0);
-    }
-
-    #[test]
     fn test_into_iter() {
         let mut list = List::new();
         list.push_back(1);
@@ -389,48 +279,43 @@ mod tests {
     }
 
     #[test]
-    fn test_mixed_operations() {
-        let mut list = List::new();
-        list.push_front(1);
-        list.push_back(2);
-        list.push_front(0);
-        list.push_back(3);
-
-        assert_eq!(list.len(), 4);
-        assert_eq!(*list.front().unwrap(), 0);
-        assert_eq!(*list.back().unwrap(), 3);
-
-        let node1 = list.pop_front().unwrap();
-        assert_eq!(unsafe { (*node1).data }, 0);
-        unsafe {
-            let _ = Box::from_raw(node1);
-        }
-
-        let node2 = list.pop_back().unwrap();
-        assert_eq!(unsafe { (*node2).data }, 3);
-        unsafe {
-            let _ = Box::from_raw(node2);
-        }
-
-        let node3 = list.pop_front().unwrap();
-        assert_eq!(unsafe { (*node3).data }, 1);
-        unsafe {
-            let _ = Box::from_raw(node3);
-        }
-
-        let node4 = list.pop_back().unwrap();
-        assert_eq!(unsafe { (*node4).data }, 2);
-        unsafe {
-            let _ = Box::from_raw(node4);
-        }
-    }
-
-    #[test]
     fn test_drop() {
         let mut list = List::new();
         for i in 0..100 {
             list.push_back(i);
         }
         // List should be properly cleaned up when it goes out of scope
+    }
+
+    #[test]
+    fn test_iter() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let vec: Vec<&i32> = list.iter().collect();
+        assert_eq!(vec, vec![&1, &2, &3]);
+
+        // List should still have all elements
+        assert_eq!(list.len(), 3);
+    }
+
+    #[test]
+    fn test_iter_mut() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        for item in list.iter_mut() {
+            *item *= 2;
+        }
+
+        let vec: Vec<&i32> = list.iter().collect();
+        assert_eq!(vec, vec![&2, &4, &6]);
+
+        // List should still have all elements
+        assert_eq!(list.len(), 3);
     }
 }
