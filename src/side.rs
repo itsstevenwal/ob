@@ -44,11 +44,22 @@ impl<T: OrderInterface> Side<T> {
             let mut level = Level::new(price);
             let node_ptr = level.add_order(order);
 
-            self.map.insert(price, &mut level);
             self.levels.insert(price, level);
+            // Get the pointer after insertion to ensure it points to valid memory
+            if let Some(level) = self.levels.get_mut(&price) {
+                self.map.insert(price, level as *mut Level<T>);
+            }
             node_ptr
         }
     }
+
+    // pub fn fill_order(&mut self, node_ptr: *mut Node<T>, fill: u64) {
+    //     let price = unsafe { (*node_ptr).data.price() };
+    //     if let Some(level_ptr) = self.map.get(&price) {
+    //         let level = unsafe { &mut *(*level_ptr) };
+    //         level.fill_order(node_ptr, fill);
+    //     }
+    // }
 
     pub fn remove_order(&mut self, node_ptr: *mut Node<T>) {
         let price = unsafe { (*node_ptr).data.price() };

@@ -46,7 +46,7 @@ impl<T: OrderInterface> Level<T> {
     /// Orders are added to the back (FIFO order)
     /// Returns a pointer to the newly inserted node
     pub fn add_order(&mut self, order: T) -> *mut crate::list::Node<T> {
-        self.total_quantity += order.quantity();
+        self.total_quantity += order.remaining();
         self.orders.push_back(order)
     }
 
@@ -55,7 +55,7 @@ impl<T: OrderInterface> Level<T> {
     pub fn remove_order(&mut self, node_ptr: *mut crate::list::Node<T>) {
         let removed = self.orders.remove(node_ptr);
         if let Some(ref order) = removed {
-            self.total_quantity -= order.quantity();
+            self.total_quantity -= order.remaining();
         }
     }
 

@@ -35,25 +35,29 @@ impl<T: OrderInterface> Orderbook<T> {
     /// Iterates through the btree on the opposite side to check for matches
     /// Matches orders and executes trades when prices cross
     /// Any remaining quantity is added to the appropriate side
-    pub fn insert_order(&mut self, price: u64, order: T) {
+    pub fn insert_order(&mut self, price: u64, mut order: T) {
         let mut remaining_quantity = order.remaining();
+        let mut fill_quantity = 0;
+        let is_buy = order.is_buy();
 
-        let book = if order.is_buy() {
-            &mut self.bids
-        } else {
-            &mut self.asks
-        };
-
-        let check_fn = if order.is_buy() {
-            // For a buy order, stop matching when the price is greater than the resting order price
-            |price: u64, resting_order: &T| price <= resting_order.price()
-        } else {
-            // For a ask order, stop matching when the price is less than the resting order price
+        let check_fn = if is_buy {
+            // For a buy order, stop matching when the price is less than the resting order price
             |price: u64, resting_order: &T| price >= resting_order.price()
+        } else {
+            // For a sell order, stop matching when the price is greater than the resting order price
+            |price: u64, resting_order: &T| price <= resting_order.price()
         };
 
+        // Match against the opposite side and collect orders to remove
         let mut to_remove = Vec::new();
-        for resting_order in book.iter_mut() {
+
+        let opposite_book = if is_buy {
+            &mut self.asks
+        } else {
+            &mut self.bids
+        };
+
+        for resting_order in opposite_book.iter_mut() {
             if check_fn(price, resting_order) {
                 if resting_order.remaining() > remaining_quantity {
                     // Resting order has more remaining quantity, fill the order and break
@@ -65,6 +69,7 @@ impl<T: OrderInterface> Orderbook<T> {
                     // Resting order has less remaining quantity, fill the order and remove the resting order
                     let taken_quantity = resting_order.remaining();
                     remaining_quantity -= taken_quantity;
+                    fill_quantity += taken_quantity;
 
                     to_remove.push(resting_order.id().to_string());
                 }
@@ -74,16 +79,21 @@ impl<T: OrderInterface> Orderbook<T> {
         }
 
         for order_id in to_remove {
-            println!("removing order {} at price {}", order_id, price);
-            let node_ptr = *self.orders.get(&order_id).unwrap();
-            book.remove_order(node_ptr);
-            self.orders.remove(&order_id);
+            if let Some(&node_ptr) = self.orders.get(&order_id) {
+                opposite_book.remove_order(node_ptr);
+                self.orders.remove(&order_id);
+            }
         }
 
+        // Add remaining quantity to the appropriate side
         if remaining_quantity > 0 {
-            println!("inserting order {} at price {}", order.id(), price);
+            order.fill(fill_quantity);
             let id = order.id().to_string();
-            let node_ptr = book.insert_order(order);
+            let node_ptr = if is_buy {
+                self.bids.insert_order(order)
+            } else {
+                self.asks.insert_order(order)
+            };
             self.orders.insert(id, node_ptr);
         }
     }
@@ -93,7 +103,11 @@ impl<T: OrderInterface> Orderbook<T> {
     /// Uses the node pointer stored in the orders map for O(1) cancellation
     pub fn cancel_order(&mut self, order_id: &str) {
         // Get the node pointer from the orders map
-        let node_ptr = *self.orders.get(order_id).unwrap();
+        let node_ptr = if let Some(&ptr) = self.orders.get(order_id) {
+            ptr
+        } else {
+            return; // Order not found, nothing to cancel
+        };
 
         // Determine which side the order is on
         let is_buy = unsafe { (*node_ptr).data.is_buy() };
@@ -423,7 +437,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "called `Result::unwrap()` on an `Err` value")]
     fn test_cancel_nonexistent_order_panics() {
         let mut ob = Orderbook::<BasicOrder>::default();
         ob.cancel_order("nonexistent");

@@ -68,7 +68,7 @@ impl<T> List<T> {
     /// Returns None if the list is empty
     /// Note: The caller is responsible for deallocating the node if needed
     fn pop_front(&mut self) -> Option<*mut Node<T>> {
-        if self.head.is_null() {
+        if self.head.is_null() || self.length == 0 {
             return None;
         }
 
@@ -92,7 +92,7 @@ impl<T> List<T> {
     /// Returns the data from the removed node, or None if the pointer is null
     /// Note: The caller must ensure the pointer is valid and points to a node in this list
     pub fn remove(&mut self, node_ptr: *mut Node<T>) -> Option<T> {
-        if node_ptr.is_null() {
+        if node_ptr.is_null() || self.length == 0 {
             return None;
         }
 
@@ -130,7 +130,12 @@ impl<T> Default for List<T> {
 
 impl<T> Drop for List<T> {
     fn drop(&mut self) {
-        while let Some(_) = self.pop_front() {}
+        while let Some(_) = self.pop_front() {
+            // // Deallocate the node
+            // unsafe {
+            //     let _ = Box::from_raw(node_ptr);
+            // }
+        }
     }
 }
 
