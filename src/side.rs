@@ -1,7 +1,7 @@
 use crate::level::Level;
 use crate::list::Node;
 use crate::order::OrderInterface;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 /// Represents one side of an orderbook (either bids or asks)
 /// Uses a BTreeMap to maintain levels sorted by price
@@ -10,9 +10,6 @@ pub struct Side<T: OrderInterface> {
 
     /// BTreeMap of price -> Level, automatically sorted by price
     levels: BTreeMap<u64, Level<T>>,
-
-    /// Map of price to mutable Level pointer
-    map: HashMap<u64, *mut Level<T>>,
 }
 
 impl<T: OrderInterface> Side<T> {
@@ -21,7 +18,6 @@ impl<T: OrderInterface> Side<T> {
         Side {
             is_bid,
             levels: BTreeMap::new(),
-            map: HashMap::new(),
         }
     }
 
@@ -37,34 +33,37 @@ impl<T: OrderInterface> Side<T> {
 
     pub fn insert_order(&mut self, order: T) -> *mut Node<T> {
         let price = order.price();
+        println!("inserting order in level {} price {}", order.id(), price);
         if let Some(level) = self.levels.get_mut(&price) {
             let node_ptr = level.add_order(order);
             node_ptr
         } else {
             let mut level = Level::new(price);
             let node_ptr = level.add_order(order);
-
+            println!("inserting level {} price {}", price, level.total_quantity());
             self.levels.insert(price, level);
-            // Get the pointer after insertion to ensure it points to valid memory
-            if let Some(level) = self.levels.get_mut(&price) {
-                self.map.insert(price, level as *mut Level<T>);
-            }
             node_ptr
         }
     }
 
-    pub fn fill_order(&mut self, node_ptr: *mut Node<T>, price: u64, fill: u64) -> bool {
-        let (removed, remove_tree) = if let Some(level_ptr) = self.map.get(&price) {
-            let level = unsafe { &mut *(*level_ptr) };
-            let removed = level.fill_order(node_ptr, fill);
+    pub fn fill_order(&mut self, node_ptr: *mut Node<T>, fill: u64) -> bool {
+        let order = unsafe { &mut (*node_ptr).data };
+        let price = order.price();
+        println!(
+            "filling order {} price {} quantity {}",
+            order.id(),
+            price,
+            fill
+        );
+        let (removed, remove_tree) = if let Some(level) = self.levels.get_mut(&price) {
+            let removed = level.fill_order(node_ptr, order, fill);
 
             (removed, level.is_empty())
         } else {
-            panic!("order not found");
+            panic!("level not found");
         };
 
         if remove_tree {
-            self.map.remove(&price);
             self.levels.remove(&price);
         }
 
@@ -74,16 +73,14 @@ impl<T: OrderInterface> Side<T> {
     pub fn remove_order(&mut self, node_ptr: *mut Node<T>) {
         let price = unsafe { (*node_ptr).data.price() };
 
-        let remove_tree = if let Some(level_ptr) = self.map.get(&price) {
-            let l = unsafe { &mut *(*level_ptr) };
-            l.remove_order(node_ptr);
-            l.is_empty()
+        let remove_tree = if let Some(level) = self.levels.get_mut(&price) {
+            level.remove_order(node_ptr);
+            level.is_empty()
         } else {
             panic!("order not found");
         };
 
         if remove_tree {
-            self.map.remove(&price);
             self.levels.remove(&price);
         }
     }

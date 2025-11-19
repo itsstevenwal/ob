@@ -47,18 +47,30 @@ impl<T: OrderInterface> Level<T> {
     /// Returns a pointer to the newly inserted node
     pub fn add_order(&mut self, order: T) -> *mut crate::list::Node<T> {
         self.total_quantity += order.remaining();
+        println!(
+            "added order to price {} total quantity {}",
+            self.price, self.total_quantity
+        );
         self.orders.push_back(order)
     }
 
     /// Fills an order and returns true if the order is fully filled
     /// and should be removed from the level
-    pub fn fill_order(&mut self, node_ptr: *mut crate::list::Node<T>, fill: u64) -> bool {
-        let order = unsafe { &mut (*node_ptr).data };
+    pub fn fill_order(
+        &mut self,
+        node_ptr: *mut crate::list::Node<T>,
+        order: &mut T,
+        fill: u64,
+    ) -> bool {
         order.fill(fill);
+        println!(
+            "filled {} to price {} total quantity {}",
+            fill, self.price, self.total_quantity
+        );
         self.total_quantity -= fill;
 
         if order.remaining() == 0 {
-            self.remove_order(node_ptr);
+            self.orders.remove(node_ptr);
             return true;
         }
 
@@ -70,6 +82,10 @@ impl<T: OrderInterface> Level<T> {
     pub fn remove_order(&mut self, node_ptr: *mut crate::list::Node<T>) {
         let removed = self.orders.remove(node_ptr);
         if let Some(ref order) = removed {
+            println!(
+                "removed order from price {} total quantity {}",
+                self.price, self.total_quantity
+            );
             self.total_quantity -= order.remaining();
         }
     }

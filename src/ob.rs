@@ -23,13 +23,6 @@ impl<T: OrderInterface> Default for Orderbook<T> {
     }
 }
 
-// Add Order – O(log M) for the first order at a limit, O(1) for all others, where M is the number of price Limits (generally << N the number of orders).
-// Cancel Order – O(1)
-// Modify Order – O(1)
-// Execute – O(1)
-// GetVolumeAtLimit – O(1)
-// GetBestBid/Offer – O(1)
-
 impl<T: OrderInterface> Orderbook<T> {
     /// Inserts an order into the orderbook at the specified price
     /// Iterates through the btree on the opposite side to check for matches
@@ -63,27 +56,24 @@ impl<T: OrderInterface> Orderbook<T> {
                 remaining_quantity -= taken_quantity;
 
                 taker_quantity += taken_quantity;
-                maker_quantities.push((resting_order.id(), taken_quantity));
-
-                continue;
+                maker_quantities.push((resting_order.id().to_string(), taken_quantity));
+            } else {
+                break;
             }
-
-            // Stop matching
-            break;
         }
 
-        // // Handle the maker quantities
-        // for (order_id, quantity) in maker_quantities {
-        //     if let Some(node_ptr) = self.orders.get(order_id) {
-        //         let removed = opposite_book.fill_order(*node_ptr, price, quantity);
-        //         if removed {
-        //             self.opposite_book.remove_order(*node_ptr);
-        //             self.orders.remove(order_id);
-        //         }
-        //     }
-        // }
+        // Handle the maker quantities
+        for (order_id, quantity) in maker_quantities {
+            println!("filling maker order {} quantity {}", order_id, quantity);
+            if let Some(node_ptr) = self.orders.get(&order_id) {
+                let removed = opposite_book.fill_order(*node_ptr, quantity);
+                if removed {
+                    self.orders.remove(&order_id);
+                }
+            }
+        }
 
-        // Add remaining quantity to the appropriate side
+        // Handle the taker quantity
         if remaining_quantity > 0 {
             order.fill(taker_quantity);
             let id = order.id().to_string();
@@ -120,8 +110,6 @@ impl<T: OrderInterface> Orderbook<T> {
         // Remove from orders map
         self.orders.remove(order_id);
     }
-
-    // pub fn snapshot(&self)
 }
 
 #[cfg(test)]
@@ -131,7 +119,7 @@ mod tests {
 
     #[test]
     fn test_new_orderbook() {
-        let ob = Orderbook::<BasicOrder>::default();
+        let _ = Orderbook::<BasicOrder>::default();
         // Orderbook should be empty initially
         // We can verify by trying to cancel a non-existent order (will panic, but that's expected)
     }
