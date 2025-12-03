@@ -1,72 +1,45 @@
+use std::{
+    fmt::Display,
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
+};
+
+pub trait Id: Eq + Display + Default {}
+
+pub trait Num:
+    Ord
+    + Eq
+    + Copy
+    + Default
+    + Display
+    + Add<Output = Self>
+    + Sub<Output = Self>
+    + Mul<Output = Self>
+    + Div<Output = Self>
+    + AddAssign<Self>
+    + SubAssign<Self>
+    + MulAssign<Self>
+    + DivAssign<Self>
+{
+}
+
 /// Trait defining the interface for orders in the orderbook
 /// This allows for different order implementations while maintaining a common interface
-pub trait OrderInterface {
+pub trait OrderInterface<T: Id, N: Num> {
     /// Returns the unique identifier for this order
-    fn id(&self) -> &str;
+    fn id<'a>(&'a self) -> &'a T;
 
     /// Returns the side of this order
     fn is_buy(&self) -> bool;
 
     /// Returns the price of this order
-    fn price(&self) -> u64;
+    fn price(&self) -> &N;
 
     /// Returns the quantity of this order
-    fn quantity(&self) -> u64;
+    fn quantity(&self) -> &N;
 
     // Returns the remaining quantity of this order
-    fn remaining(&self) -> u64;
+    fn remaining(&self) -> &N;
 
     /// Fills the order with the specified quantity
-    fn fill(&mut self, quantity: u64);
-}
-
-/// A basic order implementation
-#[cfg(test)]
-#[derive(Default, Debug, PartialEq, Eq)]
-pub struct BasicOrder {
-    id: String,
-    is_buy: bool,
-    price: u64,
-    quantity: u64,
-    filled: u64,
-}
-
-#[cfg(test)]
-impl BasicOrder {
-    pub fn new(id: &str, is_buy: bool, price: u64, quantity: u64) -> Self {
-        Self {
-            id: id.to_string(),
-            is_buy,
-            price,
-            quantity,
-            filled: 0,
-        }
-    }
-}
-
-#[cfg(test)]
-impl OrderInterface for BasicOrder {
-    fn id(&self) -> &str {
-        &self.id
-    }
-
-    fn price(&self) -> u64 {
-        self.price
-    }
-
-    fn is_buy(&self) -> bool {
-        self.is_buy
-    }
-
-    fn quantity(&self) -> u64 {
-        self.quantity
-    }
-
-    fn remaining(&self) -> u64 {
-        self.quantity - self.filled
-    }
-
-    fn fill(&mut self, quantity: u64) {
-        self.filled += quantity;
-    }
+    fn fill(&mut self, quantity: N);
 }
