@@ -1,43 +1,53 @@
 use crate::list::{Iter, IterMut, List};
-use crate::order::{Id, Num, OrderInterface};
+use crate::order::OrderInterface;
 use std::marker::PhantomData;
 
-/// Represents a price level in the orderbook
-/// A level contains all orders at a specific price point
-pub struct Level<T: Id, N: Num, O: OrderInterface<T, N>> {
-    /// The price of this level
-    price: N,
-    /// List of orders at this price level
+/// Represents a price level in the orderbook.
+/// A level contains all orders at a specific price point.
+pub struct Level<O: OrderInterface> {
+    price: O::N,
     orders: List<O>,
-    /// Total quantity across all orders at this level (cached for performance)
-    total_quantity: N,
+
+    /// Total quantity across all orders at this level.
+    /// Cached for performance.
+    total_quantity: O::N,
+
+    /// Total volume (price * quantity) across all orders at this level.
+    /// Cached for performance.
+    total_volume: O::N,
+
     /// Phantom data to mark the identifier type T as part of this struct's type
-    _phantom: PhantomData<T>,
+    _phantom: PhantomData<O::T>,
 }
 
-impl<T: Id, N: Num, O: OrderInterface<T, N>> Level<T, N, O> {
-    /// Creates a new empty level at the specified price
-    pub fn new(price: N) -> Self {
+impl<O: OrderInterface> Level<O> {
+    pub fn new(price: O::N) -> Self {
         Level {
             price,
             orders: List::new(),
-            total_quantity: N::default(),
+            total_quantity: O::N::default(),
+            total_volume: O::N::default(),
             _phantom: PhantomData,
         }
     }
 
     /// Returns the price of this level
-    pub fn price(&self) -> &N {
-        &self.price
+    pub fn price(&self) -> O::N {
+        self.price
     }
 
     /// Returns the total quantity of all orders at this level
-    pub fn total_quantity(&self) -> &N {
-        &self.total_quantity
+    pub fn total_quantity(&self) -> O::N {
+        self.total_quantity
+    }
+
+    /// Returns the total volume of all orders at this level
+    pub fn total_volume(&self) -> O::N {
+        self.total_volume
     }
 
     /// Returns the number of orders at this level
-    pub fn order_count(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.orders.len()
     }
 
@@ -50,22 +60,21 @@ impl<T: Id, N: Num, O: OrderInterface<T, N>> Level<T, N, O> {
     /// Orders are added to the back (FIFO order)
     /// Returns a pointer to the newly inserted node
     pub fn add_order(&mut self, order: O) -> *mut crate::list::Node<O> {
-        self.total_quantity += *order.remaining();
+        self.total_quantity += order.remaining();
         self.orders.push_back(order)
     }
 
     /// Fills an order and returns true if the order is fully filled
-    /// and should be removed from the level
     pub fn fill_order(
         &mut self,
         node_ptr: *mut crate::list::Node<O>,
         order: &mut O,
-        fill: N,
+        fill: O::N,
     ) -> bool {
         order.fill(fill);
         self.total_quantity -= fill;
 
-        if *order.remaining() == N::default() {
+        if order.remaining() == O::N::default() {
             self.orders.remove(node_ptr);
             return true;
         }
@@ -78,7 +87,7 @@ impl<T: Id, N: Num, O: OrderInterface<T, N>> Level<T, N, O> {
     pub fn remove_order(&mut self, node_ptr: *mut crate::list::Node<O>) {
         let removed = self.orders.remove(node_ptr);
         if let Some(ref order) = removed {
-            self.total_quantity -= *order.remaining();
+            self.total_quantity -= order.remaining();
         }
     }
 
@@ -90,5 +99,65 @@ impl<T: Id, N: Num, O: OrderInterface<T, N>> Level<T, N, O> {
     /// Returns a mutable iterator over the orders at this level
     pub fn iter_mut(&mut self) -> IterMut<'_, O> {
         self.orders.iter_mut()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::order::TestOrder;
+
+    #[test]
+    fn test_new_level() {
+        let level = Level::<TestOrder>::new(100);
+        assert_eq!(level.price(), 100);
+        assert_eq!(level.total_quantity(), 0);
+        assert_eq!(level.len(), 0);
+        assert!(level.is_empty());
+    }
+
+    #[test]
+    fn test_add_order() {
+        let mut level = Level::<TestOrder>::new(100);
+        let order = TestOrder::new("1", true, 100, 50);
+
+        level.add_order(order);
+        assert_eq!(level.total_quantity(), 50);
+        assert_eq!(level.len(), 1);
+        assert!(!level.is_empty());
+    }
+
+    #[test]
+    fn test_add_multiple_orders() {
+        let mut level = Level::<TestOrder>::new(100);
+        level.add_order(TestOrder::new("1", true, 100, 50));
+        level.add_order(TestOrder::new("2", true, 100, 30));
+        level.add_order(TestOrder::new("3", true, 100, 20));
+
+        assert_eq!(level.total_quantity(), 100);
+        assert_eq!(level.len(), 3);
+    }
+
+    #[test]
+    fn test_remove_order() {
+        let mut level = Level::<TestOrder>::new(100);
+        level.add_order(TestOrder::new("1", true, 100, 50));
+        let node_ptr = level.add_order(TestOrder::new("2", true, 100, 30));
+        level.add_order(TestOrder::new("3", true, 100, 20));
+
+        level.remove_order(node_ptr);
+        assert_eq!(level.total_quantity(), 70);
+        assert_eq!(level.len(), 2);
+    }
+
+    #[test]
+    fn test_remove_nonexistent_order() {
+        let mut level = Level::<TestOrder>::new(100);
+        level.add_order(TestOrder::new("1", true, 50, 50));
+
+        let null_ptr = std::ptr::null_mut();
+        level.remove_order(null_ptr);
+        assert_eq!(level.total_quantity(), 50);
+        assert_eq!(level.len(), 1);
     }
 }
