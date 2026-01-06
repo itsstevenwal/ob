@@ -60,6 +60,15 @@ pub struct Match<O: OrderInterface> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 impl<O: OrderInterface> OrderBook<O> {
+    #[inline(always)]
+    fn side_mut(&mut self, is_buy: bool) -> &mut Side<O> {
+        if is_buy {
+            &mut self.bids
+        } else {
+            &mut self.asks
+        }
+    }
+
     /// Applies instructions to the orderbook, mutating state.
     #[inline]
     pub fn apply(&mut self, instructions: Vec<Instruction<O>>) {
@@ -82,11 +91,7 @@ impl<O: OrderInterface> OrderBook<O> {
         }
         let id = order.id().clone();
         let is_buy = order.is_buy();
-        let node_ptr = if is_buy {
-            self.bids.insert_order(order)
-        } else {
-            self.asks.insert_order(order)
-        };
+        let node_ptr = self.side_mut(is_buy).insert_order(order);
         self.orders.insert(id, node_ptr);
     }
 
@@ -96,11 +101,7 @@ impl<O: OrderInterface> OrderBook<O> {
             return;
         };
         let is_buy = unsafe { (*node_ptr).data.is_buy() };
-        if is_buy {
-            self.bids.remove_order(node_ptr);
-        } else {
-            self.asks.remove_order(node_ptr);
-        }
+        self.side_mut(is_buy).remove_order(node_ptr);
         self.orders.remove(order_id);
     }
 
@@ -110,12 +111,7 @@ impl<O: OrderInterface> OrderBook<O> {
             return;
         };
         let is_buy = unsafe { (*node_ptr).data.is_buy() };
-        let removed = if is_buy {
-            self.bids.fill_order(node_ptr, quantity)
-        } else {
-            self.asks.fill_order(node_ptr, quantity)
-        };
-        if removed {
+        if self.side_mut(is_buy).fill_order(node_ptr, quantity) {
             self.orders.remove(order_id);
         }
     }
