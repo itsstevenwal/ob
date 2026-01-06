@@ -2,7 +2,6 @@ use crate::hash::FxHashMap;
 use crate::list::Node;
 use crate::order::OrderInterface;
 use crate::side::Side;
-use smallvec::SmallVec;
 
 /// Represents a complete orderbook with bid and ask sides
 pub struct OrderBook<O: OrderInterface> {
@@ -69,7 +68,7 @@ pub struct Match<O: OrderInterface> {
     /// The taker order ID and filled quantity
     pub taker: (O::T, O::N),
     /// The maker order IDs and their filled quantities (inline up to 8 makers)
-    pub makers: SmallVec<[(O::T, O::N); 8]>,
+    pub makers: Vec<(O::T, O::N)>,
 }
 
 impl<O: OrderInterface> OrderBook<O> {
@@ -188,7 +187,7 @@ impl<O: OrderInterface> OrderBook<O> {
 
         let mut remaining_quantity = order.remaining();
         let mut taker_quantity = O::N::default();
-        let mut maker_quantities: SmallVec<[(O::T, O::N); 8]> = SmallVec::new();
+        let mut maker_quantities = Vec::new();
         let mut instructions = Vec::with_capacity(16);
         let is_buy = order.is_buy();
         let price = order.price();
