@@ -112,6 +112,7 @@ mod tests {
         let level = Level::<TestOrder>::new(100);
         assert_eq!(level.price(), 100);
         assert_eq!(level.total_quantity(), 0);
+        assert_eq!(level.total_volume(), 0);
         assert_eq!(level.len(), 0);
         assert!(level.is_empty());
     }

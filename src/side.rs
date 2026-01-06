@@ -51,13 +51,12 @@ impl<O: OrderInterface> Side<O> {
     pub fn fill_order(&mut self, node_ptr: *mut Node<O>, fill: O::N) -> bool {
         let order = unsafe { &mut (*node_ptr).data };
         let price = order.price();
-        let (removed, remove_tree) = if let Some(level) = self.levels.get_mut(&price) {
-            let removed = level.fill_order(node_ptr, order, fill);
-
-            (removed, level.is_empty())
-        } else {
-            panic!("level not found");
-        };
+        let level = self
+            .levels
+            .get_mut(&price)
+            .expect("node_ptr must point to valid order in this side");
+        let removed = level.fill_order(node_ptr, order, fill);
+        let remove_tree = level.is_empty();
 
         if remove_tree {
             self.levels.remove(&price);
@@ -73,13 +72,12 @@ impl<O: OrderInterface> Side<O> {
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn remove_order(&mut self, node_ptr: *mut Node<O>) {
         let price = unsafe { (*node_ptr).data.price() };
-
-        let remove_tree = if let Some(level) = self.levels.get_mut(&price) {
-            level.remove_order(node_ptr);
-            level.is_empty()
-        } else {
-            panic!("order not found");
-        };
+        let level = self
+            .levels
+            .get_mut(&price)
+            .expect("node_ptr must point to valid order in this side");
+        level.remove_order(node_ptr);
+        let remove_tree = level.is_empty();
 
         if remove_tree {
             self.levels.remove(&price);

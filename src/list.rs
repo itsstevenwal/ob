@@ -235,6 +235,13 @@ mod tests {
     }
 
     #[test]
+    fn test_default() {
+        let list: List<i32> = List::default();
+        assert!(list.is_empty());
+        assert_eq!(list.len(), 0);
+    }
+
+    #[test]
     fn test_push_back() {
         let mut list = List::new();
         list.push_back(1);
