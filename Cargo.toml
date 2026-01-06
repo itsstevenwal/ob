@@ -5,6 +5,14 @@ edition = "2021"
 
 [dependencies]
 
+[dev-dependencies]
+criterion = "0.5"
+rand = "0.8"
+
+[[bench]]
+name = "bench"
+harness = false
+
 [profile.release]
 lto = "fat"
 codegen-units = 1
