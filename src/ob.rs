@@ -49,11 +49,13 @@ pub enum EvalResult<O: OrderInterface> {
 }
 
 /// A message to indicate an error
+#[derive(Debug, PartialEq, Eq)]
 pub enum Msg {
     OrderNotFound,
     OrderAlreadyExists,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Instruction<O: OrderInterface> {
     Insert(O, O::N),  // Order, Remaining Quantity
     Delete(O::T),     // Order ID
@@ -258,103 +260,6 @@ impl<O: OrderInterface> OrderBook<O> {
 
         Instruction::Delete(order_id)
     }
-    // /// Inserts an order into the orderbook at the specified price
-    // /// Iterates through the btree on the opposite side to check for matches
-    // /// Matches orders and executes trades when prices cross
-    // /// Any remaining quantity is added to the appropriate side
-    // pub fn insert_order(&mut self, price: O::N, mut order: O) {
-    //     let mut remaining_quantity = order.remaining();
-    //     let mut taker_quantity = O::N::default();
-    //     let mut maker_quantities = Vec::new();
-    //     let is_buy = order.is_buy();
-
-    //     let check_fn = if is_buy {
-    //         // For a buy order, stop matching when the price is less than the resting order price
-    //         |price: O::N, resting_order: &O| price >= resting_order.price()
-    //     } else {
-    //         // For a sell order, stop matching when the price is greater than the resting order price
-    //         |price: O::N, resting_order: &O| price <= resting_order.price()
-    //     };
-
-    //     // Match against the opposite side and collect orders to remove
-
-    //     let opposite_book = if is_buy {
-    //         &mut self.asks
-    //     } else {
-    //         &mut self.bids
-    //     };
-
-    //     for resting_order in opposite_book.iter_mut() {
-    //         if check_fn(price, resting_order) && remaining_quantity > O::N::default() {
-    //             let remaining = if let Some(rm) = self.temp.get(order.id()) {
-    //                 *rm
-    //             } else {
-    //                 order.remaining()
-    //             };
-
-    //             if remaining == O::N::default() {
-    //                 // Order is fully filled or cancelled, skip it
-    //                 continue;
-    //             }
-
-    //             let taken_quantity = remaining_quantity.min(remaining);
-    //             remaining_quantity -= taken_quantity;
-
-    //             taker_quantity += taken_quantity;
-    //             let order_id = order.id().clone();
-    //             maker_quantities.push((order_id.clone(), taken_quantity));
-    //             self.temp.insert(order_id, remaining - taken_quantity);
-    //         } else {
-    //             break;
-    //         }
-    //     }
-
-    //     // Handle the maker quantities
-    //     for (order_id, quantity) in maker_quantities {
-    //         if let Some(node_ptr) = self.orders.get(&order_id) {
-    //             if opposite_book.fill_order(*node_ptr, quantity) {
-    //                 self.orders.remove(&order_id);
-    //             }
-    //         }
-    //     }
-
-    //     // Handle the taker quantity
-    //     if remaining_quantity > O::N::default() {
-    //         order.fill(taker_quantity);
-    //         let id = order.id().clone();
-    //         let node_ptr = if is_buy {
-    //             self.bids.insert_order(order)
-    //         } else {
-    //             self.asks.insert_order(order)
-    //         };
-    //         self.orders.insert(id, node_ptr);
-    //     }
-    // }
-
-    // /// Cancels an order by its ID
-    // /// Returns the cancelled order if found, None otherwise
-    // /// Uses the node pointer stored in the orders map for O(1) cancellation
-    // pub fn cancel_order(&mut self, order_id: &O::T) {
-    //     // Get the node pointer from the orders map
-    //     let node_ptr = if let Some(&ptr) = self.orders.get(order_id) {
-    //         ptr
-    //     } else {
-    //         return; // Order not found, nothing to cancel
-    //     };
-
-    //     // Determine which side the order is on
-    //     let is_buy = unsafe { (*node_ptr).data.is_buy() };
-
-    //     // Remove from the side (the data has been forgotten, so this is safe)
-    //     if is_buy {
-    //         self.bids.remove_order(node_ptr);
-    //     } else {
-    //         self.asks.remove_order(node_ptr);
-    //     }
-
-    //     // Remove from orders map
-    //     self.orders.remove(order_id);
-    // }
 }
 
 #[cfg(test)]
@@ -379,15 +284,17 @@ mod tests {
         let mut ob = OrderBook::<TestOrder>::default();
 
         // Buy into empty book
-        let (m, i) = ob.eval_insert(TestOrder::new("1", true, 1000, 100));
+        let order = TestOrder::new("1", true, 1000, 100);
+        let (m, i) = ob.eval_insert(order.clone());
         assert!(m.is_none());
-        assert!(matches!(&i[0], Instruction::Insert(_, 100)));
+        assert_eq!(i[0], Instruction::Insert(order, 100));
 
         // Sell into empty book
         let mut ob = OrderBook::<TestOrder>::default();
-        let (m, i) = ob.eval_insert(TestOrder::new("1", false, 1000, 50));
+        let order = TestOrder::new("1", false, 1000, 50);
+        let (m, i) = ob.eval_insert(order.clone());
         assert!(m.is_none());
-        assert!(matches!(&i[0], Instruction::Insert(_, 50)));
+        assert_eq!(i[0], Instruction::Insert(order, 50));
     }
 
     #[test]
@@ -397,7 +304,7 @@ mod tests {
 
         let (m, i) = ob.eval_insert(TestOrder::new("1", true, 1000, 50));
         assert!(m.is_none());
-        assert!(matches!(&i[0], Instruction::NoOp(Msg::OrderAlreadyExists)));
+        assert_eq!(i[0], Instruction::NoOp(Msg::OrderAlreadyExists));
     }
 
     #[test]
@@ -406,12 +313,12 @@ mod tests {
 
         // Cancel non-existent
         let i = ob.eval_cancel(String::from("x"));
-        assert!(matches!(i, Instruction::NoOp(Msg::OrderNotFound)));
+        assert_eq!(i, Instruction::NoOp(Msg::OrderNotFound));
 
         // Cancel existing
         setup_order(&mut ob, "1", true, 1000, 100);
         let i = ob.eval_cancel(String::from("1"));
-        assert!(matches!(i, Instruction::Delete(_)));
+        assert_eq!(i, Instruction::Delete(String::from("1")));
         assert_eq!(*ob.temp.get("1").unwrap(), 0);
     }
 
@@ -424,15 +331,16 @@ mod tests {
         let (m, i) = ob.eval_insert(TestOrder::new("b1", true, 1000, 100));
         assert_eq!(m.unwrap().taker.1, 100);
         assert_eq!(i.len(), 1);
-        assert!(matches!(&i[0], Instruction::Fill(id, 100) if id == "s1"));
+        assert_eq!(i[0], Instruction::Fill(String::from("s1"), 100));
 
         // Partial fill with taker remaining
         let mut ob = OrderBook::<TestOrder>::default();
         setup_order(&mut ob, "s1", false, 1000, 50);
-        let (m, i) = ob.eval_insert(TestOrder::new("b1", true, 1000, 100));
+        let order = TestOrder::new("b1", true, 1000, 100);
+        let (m, i) = ob.eval_insert(order.clone());
         assert_eq!(m.unwrap().taker.1, 50);
         assert_eq!(i.len(), 2);
-        assert!(matches!(&i[0], Instruction::Insert(_, 50)));
+        assert_eq!(i[0], Instruction::Insert(order, 50));
     }
 
     #[test]

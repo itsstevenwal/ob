@@ -45,7 +45,7 @@ pub trait OrderInterface {
 }
 
 #[cfg(test)]
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct TestOrder {
     id: String,
     is_buy: bool,
