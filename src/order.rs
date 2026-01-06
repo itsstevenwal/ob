@@ -16,10 +16,10 @@ pub trait OrderInterface {
         + Copy
         + Default
         + Display
-        + Add
-        + Sub
-        + Mul
-        + Div
+        + Add<Output = Self::N>
+        + Sub<Output = Self::N>
+        + Mul<Output = Self::N>
+        + Div<Output = Self::N>
         + AddAssign
         + SubAssign
         + MulAssign
