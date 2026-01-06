@@ -26,15 +26,6 @@ pub enum Op<O: OrderInterface> {
     Delete(O::T),
 }
 
-/// Eval result: Insert, Match, Delete, or NoOp.
-#[allow(dead_code)]
-pub enum EvalResult<O: OrderInterface> {
-    Insert(O, O::N),
-    Match(O, O::N, Vec<(O::T, O::N)>),
-    Delete(O::T),
-    NoOp(Msg),
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum Msg {
     OrderNotFound,
