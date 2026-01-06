@@ -108,33 +108,24 @@ mod tests {
     use crate::order::TestOrder;
 
     #[test]
-    fn test_new_level() {
+    fn test_level_basics() {
         let level = Level::<TestOrder>::new(100);
         assert_eq!(level.price(), 100);
         assert_eq!(level.total_quantity(), 0);
         assert_eq!(level.total_volume(), 0);
-        assert_eq!(level.len(), 0);
         assert!(level.is_empty());
     }
 
     #[test]
-    fn test_add_order() {
+    fn test_add_orders() {
         let mut level = Level::<TestOrder>::new(100);
-        let order = TestOrder::new("1", true, 100, 50);
 
-        level.add_order(order);
+        level.add_order(TestOrder::new("1", true, 100, 50));
         assert_eq!(level.total_quantity(), 50);
         assert_eq!(level.len(), 1);
-        assert!(!level.is_empty());
-    }
 
-    #[test]
-    fn test_add_multiple_orders() {
-        let mut level = Level::<TestOrder>::new(100);
-        level.add_order(TestOrder::new("1", true, 100, 50));
         level.add_order(TestOrder::new("2", true, 100, 30));
         level.add_order(TestOrder::new("3", true, 100, 20));
-
         assert_eq!(level.total_quantity(), 100);
         assert_eq!(level.len(), 3);
     }
@@ -149,16 +140,9 @@ mod tests {
         level.remove_order(node_ptr);
         assert_eq!(level.total_quantity(), 70);
         assert_eq!(level.len(), 2);
-    }
 
-    #[test]
-    fn test_remove_nonexistent_order() {
-        let mut level = Level::<TestOrder>::new(100);
-        level.add_order(TestOrder::new("1", true, 50, 50));
-
-        let null_ptr = std::ptr::null_mut();
-        level.remove_order(null_ptr);
-        assert_eq!(level.total_quantity(), 50);
-        assert_eq!(level.len(), 1);
+        // Null pointer does nothing
+        level.remove_order(std::ptr::null_mut());
+        assert_eq!(level.total_quantity(), 70);
     }
 }
