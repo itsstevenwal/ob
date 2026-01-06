@@ -281,339 +281,290 @@ impl<O: OrderInterface> OrderBook<O> {
     // }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::order::TestOrder;
-
-//     #[test]
-//     fn test_new_orderbook() {
-//         let _ = OrderBook::<TestOrder>::default();
-//         // Orderbook should be empty initially
-//         // We can verify by trying to cancel a non-existent order (will panic, but that's expected)
-//     }
-
-//     #[test]
-//     fn test_insert_buy_order_no_match() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-//         let order = TestOrder::new("1", true, 1000, 100);
-//         ob.insert_order(1000, order);
-
-//         // Order should be in the book, verify by cancelling it
-//         ob.cancel_order(&String::from("1"));
-//         // If we get here without panic, the order was successfully added and removed
-//     }
-
-//     #[test]
-//     fn test_insert_sell_order_no_match() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-//         let order = TestOrder::new("1", false, 1100, 50);
-//         ob.insert_order(1100, order);
-
-//         // Order should be in the book, verify by cancelling it
-//         ob.cancel_order(&String::from("1"));
-//     }
-
-//     #[test]
-//     fn test_buy_order_matches_sell_order_complete_fill() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add a sell order at 1000
-//         let sell_order = TestOrder::new("sell1", false, 1000, 100);
-//         ob.insert_order(1000, sell_order);
-
-//         // Add a buy order at 1000 (should match completely)
-//         let buy_order = TestOrder::new("buy1", true, 1000, 100);
-//         ob.insert_order(1000, buy_order);
-
-//         // Both orders should be fully filled and not in the book
-//         // Verify by attempting to cancel (should panic if not in book)
-//         // Since we can't easily check, we'll verify the sell order was removed
-//         // by checking that cancelling it would panic
-//     }
-
-//     #[test]
-//     fn test_buy_order_matches_sell_order_partial_fill_buy_remaining() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add a sell order at 1000 with quantity 50
-//         let sell_order = TestOrder::new("sell1", false, 1000, 50);
-//         ob.insert_order(1000, sell_order);
-
-//         // Add a buy order at 1000 with quantity 100 (should partially fill)
-//         let buy_order = TestOrder::new("buy1", true, 1000, 100);
-//         ob.insert_order(1000, buy_order);
-
-//         // Sell order should be fully filled and removed
-//         // Buy order should have 50 remaining and be in the book
-//         ob.cancel_order(&String::from("buy1")); // Should succeed if buy order is still in book
-//     }
-
-//     #[test]
-//     fn test_buy_order_matches_sell_order_partial_fill_sell_remaining() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add a sell order at 1000 with quantity 100
-//         let sell_order = TestOrder::new("sell1", false, 1000, 100);
-//         ob.insert_order(1000, sell_order);
-
-//         // Add a buy order at 1000 with quantity 50 (should partially fill)
-//         let buy_order = TestOrder::new("buy1", true, 1000, 50);
-//         ob.insert_order(1000, buy_order);
-
-//         // Buy order should be fully filled and removed
-//         // Sell order should have 50 remaining and be in the book
-//         ob.cancel_order(&String::from("sell1")); // Should succeed if sell order is still in book
-//     }
-
-//     #[test]
-//     fn test_sell_order_matches_buy_order_complete_fill() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add a buy order at 1000
-//         let buy_order = TestOrder::new("buy1", true, 1000, 100);
-//         ob.insert_order(1000, buy_order);
-
-//         // Add a sell order at 1000 (should match completely)
-//         let sell_order = TestOrder::new("sell1", false, 1000, 100);
-//         ob.insert_order(1000, sell_order);
-
-//         // Both orders should be fully filled and not in the book
-//     }
-
-//     #[test]
-//     fn test_sell_order_matches_buy_order_partial_fill() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add a buy order at 1000 with quantity 100
-//         let buy_order = TestOrder::new("buy1", true, 1000, 100);
-//         ob.insert_order(1000, buy_order);
-
-//         // Add a sell order at 1000 with quantity 50 (should partially fill)
-//         let sell_order = TestOrder::new("sell1", false, 1000, 50);
-//         ob.insert_order(1000, sell_order);
-
-//         // Sell order should be fully filled and removed
-//         // Buy order should have 50 remaining and be in the book
-//         ob.cancel_order(&String::from("buy1")); // Should succeed if buy order is still in book
-//     }
-
-//     #[test]
-//     fn test_buy_order_matches_multiple_sell_orders() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add multiple sell orders
-//         ob.insert_order(1000, TestOrder::new("sell1", false, 1000, 30));
-//         ob.insert_order(1000, TestOrder::new("sell2", false, 1000, 40));
-//         ob.insert_order(1000, TestOrder::new("sell3", false, 1000, 20));
-
-//         // Add a buy order that will match all three
-//         ob.insert_order(1000, TestOrder::new("buy1", true, 1000, 90));
-
-//         // All sell orders should be fully filled and removed
-//         // Buy order should be fully filled and removed
-//     }
-
-//     #[test]
-//     fn test_sell_order_matches_multiple_buy_orders() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add multiple buy orders
-//         ob.insert_order(1000, TestOrder::new("buy1", true, 1000, 30));
-//         ob.insert_order(1000, TestOrder::new("buy2", true, 1000, 40));
-//         ob.insert_order(1000, TestOrder::new("buy3", true, 1000, 20));
-
-//         // Add a sell order that will match all three
-//         ob.insert_order(1000, TestOrder::new("sell1", false, 1000, 90));
-
-//         // All buy orders should be fully filled and removed
-//         // Sell order should be fully filled and removed
-//     }
-
-//     #[test]
-//     fn test_buy_order_at_higher_price_matches_lower_sell() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add a sell order at 1000
-//         ob.insert_order(1000, TestOrder::new("sell1", false, 1000, 100));
-
-//         // Add a buy order at 1100 (higher price, should match)
-//         ob.insert_order(1100, TestOrder::new("buy1", true, 1100, 100));
-
-//         // Both should match and be removed
-//     }
-
-//     #[test]
-//     fn test_sell_order_at_lower_price_matches_higher_buy() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add a buy order at 1100
-//         ob.insert_order(1100, TestOrder::new("buy1", true, 1100, 100));
-
-//         // Add a sell order at 1000 (lower price, should match)
-//         ob.insert_order(1000, TestOrder::new("sell1", false, 1000, 100));
-
-//         // Both should match and be removed
-//     }
-
-//     #[test]
-//     fn test_buy_order_does_not_match_higher_sell() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add a sell order at 1100
-//         ob.insert_order(1100, TestOrder::new("sell1", false, 1100, 100));
-
-//         // Add a buy order at 1000 (lower price, should NOT match)
-//         ob.insert_order(1000, TestOrder::new("buy1", true, 1000, 100));
-
-//         // Both should remain in the book
-//         ob.cancel_order(&String::from("sell1"));
-//         ob.cancel_order(&String::from("buy1"));
-//     }
-
-//     #[test]
-//     fn test_sell_order_does_not_match_lower_buy() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add a buy order at 1000
-//         ob.insert_order(1000, TestOrder::new("buy1", true, 1000, 100));
-
-//         // Add a sell order at 1100 (higher price, should NOT match)
-//         ob.insert_order(1100, TestOrder::new("sell1", false, 1100, 100));
-
-//         // Both should remain in the book
-//         ob.cancel_order(&String::from("buy1"));
-//         ob.cancel_order(&String::from("sell1"));
-//     }
-
-//     #[test]
-//     fn test_cancel_buy_order() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-//         ob.insert_order(1000, TestOrder::new("buy1", true, 1000, 100));
-
-//         ob.cancel_order(&String::from("buy1"));
-//         // Order should be removed, verify by attempting to cancel again (should panic)
-//     }
-
-//     #[test]
-//     fn test_cancel_sell_order() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-//         ob.insert_order(1100, TestOrder::new("sell1", false, 1100, 50));
-
-//         ob.cancel_order(&String::from("sell1"));
-//         // Order should be removed
-//     }
-
-//     #[test]
-//     fn test_multiple_orders_at_same_price() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add multiple buy orders at the same price
-//         ob.insert_order(1000, TestOrder::new("buy1", true, 1000, 100));
-//         ob.insert_order(1000, TestOrder::new("buy2", true, 1000, 50));
-//         ob.insert_order(1000, TestOrder::new("buy3", true, 1000, 25));
-
-//         // All should be in the book
-//         ob.cancel_order(&String::from("buy1"));
-//         ob.cancel_order(&String::from("buy2"));
-//         ob.cancel_order(&String::from("buy3"));
-//     }
-
-//     #[test]
-//     fn test_multiple_orders_different_prices() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add buy orders at different prices
-//         ob.insert_order(1000, TestOrder::new("buy1", true, 1000, 100));
-//         ob.insert_order(990, TestOrder::new("buy2", true, 990, 50));
-//         ob.insert_order(1010, TestOrder::new("buy3", true, 1010, 25));
-
-//         // Add sell orders at different prices
-//         ob.insert_order(1100, TestOrder::new("sell1", false, 1100, 75));
-//         ob.insert_order(1110, TestOrder::new("sell2", false, 1110, 30));
-
-//         // All should be in the book
-//         ob.cancel_order(&String::from("buy1"));
-//         ob.cancel_order(&String::from("buy2"));
-//         ob.cancel_order(&String::from("buy3"));
-//         ob.cancel_order(&String::from("sell1"));
-//         ob.cancel_order(&String::from("sell2"));
-//     }
-
-//     #[test]
-//     fn test_order_matching_stops_at_price_boundary() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add sell orders at different prices
-//         ob.insert_order(1000, TestOrder::new("sell1", false, 1000, 50));
-//         ob.insert_order(1100, TestOrder::new("sell2", false, 1100, 50));
-
-//         // Add a buy order at 1000 - should only match sell1, not sell2
-//         ob.insert_order(1000, TestOrder::new("buy1", true, 1000, 100));
-
-//         // sell1 should be matched, buy1 should have 50 remaining
-//         // sell2 should still be in the book
-//         ob.cancel_order(&String::from("buy1"));
-//         ob.cancel_order(&String::from("sell2"));
-//     }
-
-//     #[test]
-//     fn test_buy_order_matches_best_ask_first() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add sell orders at different prices (lower price = better for buyer)
-//         ob.insert_order(1000, TestOrder::new("sell1", false, 1000, 30));
-//         ob.insert_order(1100, TestOrder::new("sell2", false, 1100, 50));
-//         ob.insert_order(1050, TestOrder::new("sell3", false, 1050, 40));
-
-//         // Add a buy order that will match multiple orders
-//         // Should match sell1 first (1000), then sell3 (1050), then sell2 (1100)
-//         ob.insert_order(1100, TestOrder::new("buy1", true, 1100, 100));
-
-//         // All sell orders should be matched
-//         // Buy order should be fully filled
-//     }
-
-//     #[test]
-//     fn test_sell_order_matches_best_bid_first() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Add buy orders at different prices (higher price = better for seller)
-//         ob.insert_order(1100, TestOrder::new("buy1", true, 1100, 30));
-//         ob.insert_order(1000, TestOrder::new("buy2", true, 1000, 50));
-//         ob.insert_order(1050, TestOrder::new("buy3", true, 1050, 40));
-
-//         // Add a sell order that will match multiple orders
-//         // Should match buy1 first (1100), then buy3 (1050), then buy2 (1000)
-//         ob.insert_order(1000, TestOrder::new("sell1", false, 1000, 100));
-
-//         // All buy orders should be matched
-//         // Sell order should be fully filled
-//     }
-
-//     #[test]
-//     fn test_cancel_nonexistent_order_panics() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-//         ob.cancel_order(&String::from("nonexistent"));
-//     }
-
-//     #[test]
-//     fn test_complex_matching_scenario() {
-//         let mut ob = OrderBook::<TestOrder>::default();
-
-//         // Build up a book with multiple levels
-//         ob.insert_order(1000, TestOrder::new("buy1", true, 1000, 100));
-//         ob.insert_order(990, TestOrder::new("buy2", true, 990, 50));
-//         ob.insert_order(1100, TestOrder::new("sell1", false, 1100, 75));
-//         ob.insert_order(1110, TestOrder::new("sell2", false, 1110, 25));
-
-//         // Add a large buy order that crosses the spread
-//         ob.insert_order(1100, TestOrder::new("buy3", true, 1100, 200));
-
-//         // buy3 should match sell1 and sell2 completely
-//         // buy3 should have 100 remaining and be in the book
-//         ob.cancel_order(&String::from("buy3"));
-//         ob.cancel_order(&String::from("buy1"));
-//         ob.cancel_order(&String::from("buy2"));
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::order::TestOrder;
+
+    #[test]
+    fn test_new_orderbook() {
+        let ob = OrderBook::<TestOrder>::default();
+        assert!(ob.bids.is_empty());
+        assert!(ob.asks.is_empty());
+    }
+
+    #[test]
+    fn test_eval_insert_buy_order_no_match() {
+        let mut ob = OrderBook::<TestOrder>::default();
+        let order = TestOrder::new("1", true, 1000, 100);
+
+        let (match_result, instructions) = ob.eval_insert(order);
+
+        // No match expected (empty book)
+        assert!(match_result.is_none());
+        // Should have an Insert instruction
+        assert_eq!(instructions.len(), 1);
+        assert!(matches!(&instructions[0], Instruction::Insert(_, 100)));
+    }
+
+    #[test]
+    fn test_eval_insert_sell_order_no_match() {
+        let mut ob = OrderBook::<TestOrder>::default();
+        let order = TestOrder::new("1", false, 1100, 50);
+
+        let (match_result, instructions) = ob.eval_insert(order);
+
+        assert!(match_result.is_none());
+        assert_eq!(instructions.len(), 1);
+        assert!(matches!(&instructions[0], Instruction::Insert(_, 50)));
+    }
+
+    #[test]
+    fn test_eval_insert_duplicate_order() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        // Insert first order into the orders map to simulate it exists
+        let order1 = TestOrder::new("1", true, 1000, 100);
+        let node_ptr = ob.bids.insert_order(order1);
+        ob.orders.insert(String::from("1"), node_ptr);
+
+        // Try to insert duplicate
+        let order2 = TestOrder::new("1", true, 1000, 50);
+        let (match_result, instructions) = ob.eval_insert(order2);
+
+        assert!(match_result.is_none());
+        assert_eq!(instructions.len(), 1);
+        assert!(matches!(
+            &instructions[0],
+            Instruction::NoOp(Msg::OrderAlreadyExists)
+        ));
+    }
+
+    #[test]
+    fn test_eval_cancel_nonexistent_order() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        let instruction = ob.eval_cancel(String::from("nonexistent"));
+
+        assert!(matches!(instruction, Instruction::NoOp(Msg::OrderNotFound)));
+    }
+
+    #[test]
+    fn test_eval_cancel_existing_order() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        // Add order to the book
+        let order = TestOrder::new("1", true, 1000, 100);
+        let node_ptr = ob.bids.insert_order(order);
+        ob.orders.insert(String::from("1"), node_ptr);
+
+        let instruction = ob.eval_cancel(String::from("1"));
+
+        assert!(matches!(instruction, Instruction::Delete(_)));
+        // Check temp map has zero remaining
+        assert_eq!(*ob.temp.get(&String::from("1")).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_eval_buy_matches_sell_complete_fill() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        // Add a sell order at 1000
+        let sell_order = TestOrder::new("sell1", false, 1000, 100);
+        let node_ptr = ob.asks.insert_order(sell_order);
+        ob.orders.insert(String::from("sell1"), node_ptr);
+
+        // Buy order at 1000 should match
+        let buy_order = TestOrder::new("buy1", true, 1000, 100);
+        let (match_result, instructions) = ob.eval_insert(buy_order);
+
+        // Should have a match
+        assert!(match_result.is_some());
+        let m = match_result.unwrap();
+        assert_eq!(m.taker.0, "buy1");
+        assert_eq!(m.taker.1, 100);
+        assert_eq!(m.makers.len(), 1);
+        assert_eq!(m.makers[0].0, "sell1");
+        assert_eq!(m.makers[0].1, 100);
+
+        // Should have Fill instruction (no Insert since fully matched)
+        assert_eq!(instructions.len(), 1);
+        assert!(matches!(&instructions[0], Instruction::Fill(id, 100) if id == "sell1"));
+    }
+
+    #[test]
+    fn test_eval_buy_matches_sell_partial_fill_buy_remaining() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        // Add a sell order at 1000 with quantity 50
+        let sell_order = TestOrder::new("sell1", false, 1000, 50);
+        let node_ptr = ob.asks.insert_order(sell_order);
+        ob.orders.insert(String::from("sell1"), node_ptr);
+
+        // Buy order with quantity 100 should partially match
+        let buy_order = TestOrder::new("buy1", true, 1000, 100);
+        let (match_result, instructions) = ob.eval_insert(buy_order);
+
+        assert!(match_result.is_some());
+        let m = match_result.unwrap();
+        assert_eq!(m.taker.1, 50); // Only 50 matched
+        assert_eq!(m.makers[0].1, 50);
+
+        // Should have Insert (remaining 50) + Fill
+        assert_eq!(instructions.len(), 2);
+        assert!(matches!(&instructions[0], Instruction::Insert(_, 50)));
+        assert!(matches!(&instructions[1], Instruction::Fill(_, 50)));
+    }
+
+    #[test]
+    fn test_eval_buy_does_not_match_higher_sell() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        // Add a sell order at 1100
+        let sell_order = TestOrder::new("sell1", false, 1100, 100);
+        let node_ptr = ob.asks.insert_order(sell_order);
+        ob.orders.insert(String::from("sell1"), node_ptr);
+
+        // Buy order at 1000 should NOT match (price too low)
+        let buy_order = TestOrder::new("buy1", true, 1000, 100);
+        let (match_result, instructions) = ob.eval_insert(buy_order);
+
+        assert!(match_result.is_none());
+        assert_eq!(instructions.len(), 1);
+        assert!(matches!(&instructions[0], Instruction::Insert(_, 100)));
+    }
+
+    #[test]
+    fn test_eval_sell_does_not_match_lower_buy() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        // Add a buy order at 1000
+        let buy_order = TestOrder::new("buy1", true, 1000, 100);
+        let node_ptr = ob.bids.insert_order(buy_order);
+        ob.orders.insert(String::from("buy1"), node_ptr);
+
+        // Sell order at 1100 should NOT match (price too high)
+        let sell_order = TestOrder::new("sell1", false, 1100, 100);
+        let (match_result, instructions) = ob.eval_insert(sell_order);
+
+        assert!(match_result.is_none());
+        assert_eq!(instructions.len(), 1);
+        assert!(matches!(&instructions[0], Instruction::Insert(_, 100)));
+    }
+
+    #[test]
+    fn test_eval_buy_at_higher_price_matches_lower_sell() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        // Add a sell order at 1000
+        let sell_order = TestOrder::new("sell1", false, 1000, 100);
+        let node_ptr = ob.asks.insert_order(sell_order);
+        ob.orders.insert(String::from("sell1"), node_ptr);
+
+        // Buy order at 1100 should match the 1000 sell
+        let buy_order = TestOrder::new("buy1", true, 1100, 100);
+        let (match_result, _) = ob.eval_insert(buy_order);
+
+        assert!(match_result.is_some());
+        assert_eq!(match_result.unwrap().taker.1, 100);
+    }
+
+    #[test]
+    fn test_eval_sell_at_lower_price_matches_higher_buy() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        // Add a buy order at 1100
+        let buy_order = TestOrder::new("buy1", true, 1100, 100);
+        let node_ptr = ob.bids.insert_order(buy_order);
+        ob.orders.insert(String::from("buy1"), node_ptr);
+
+        // Sell order at 1000 should match the 1100 buy
+        let sell_order = TestOrder::new("sell1", false, 1000, 100);
+        let (match_result, _) = ob.eval_insert(sell_order);
+
+        assert!(match_result.is_some());
+        assert_eq!(match_result.unwrap().taker.1, 100);
+    }
+
+    #[test]
+    fn test_eval_with_ops() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        let ops = vec![
+            Op::Insert(TestOrder::new("buy1", true, 1000, 100)),
+            Op::Insert(TestOrder::new("sell1", false, 1100, 50)),
+        ];
+
+        let (matches, instructions) = ob.eval(ops);
+
+        // No matches (prices don't cross)
+        assert!(matches.is_empty());
+        // Two inserts
+        assert_eq!(instructions.len(), 2);
+    }
+
+    #[test]
+    fn test_eval_matching_orders() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        // First add a sell order to the book
+        let sell_order = TestOrder::new("sell1", false, 1000, 100);
+        let node_ptr = ob.asks.insert_order(sell_order);
+        ob.orders.insert(String::from("sell1"), node_ptr);
+
+        // Now evaluate a matching buy order
+        let ops = vec![Op::Insert(TestOrder::new("buy1", true, 1000, 100))];
+
+        let (matches, instructions) = ob.eval(ops);
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].taker.0, "buy1");
+        assert_eq!(matches[0].makers[0].0, "sell1");
+        assert_eq!(instructions.len(), 1);
+    }
+
+    #[test]
+    fn test_temp_state_tracks_fills() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        // Add a sell order
+        let sell_order = TestOrder::new("sell1", false, 1000, 100);
+        let node_ptr = ob.asks.insert_order(sell_order);
+        ob.orders.insert(String::from("sell1"), node_ptr);
+
+        // Partial match
+        let buy_order = TestOrder::new("buy1", true, 1000, 30);
+        ob.eval_insert(buy_order);
+
+        // Temp should track remaining
+        assert_eq!(*ob.temp.get(&String::from("sell1")).unwrap(), 70);
+
+        // Another partial match
+        let buy_order2 = TestOrder::new("buy2", true, 1000, 20);
+        ob.eval_insert(buy_order2);
+
+        assert_eq!(*ob.temp.get(&String::from("sell1")).unwrap(), 50);
+    }
+
+    #[test]
+    fn test_cancelled_order_skipped_in_matching() {
+        let mut ob = OrderBook::<TestOrder>::default();
+
+        // Add a sell order
+        let sell_order = TestOrder::new("sell1", false, 1000, 100);
+        let node_ptr = ob.asks.insert_order(sell_order);
+        ob.orders.insert(String::from("sell1"), node_ptr);
+
+        // Cancel it
+        ob.eval_cancel(String::from("sell1"));
+
+        // Try to match - should not match cancelled order
+        let buy_order = TestOrder::new("buy1", true, 1000, 50);
+        let (match_result, instructions) = ob.eval_insert(buy_order);
+
+        // No match since order was cancelled
+        assert!(match_result.is_none());
+        // Should insert the buy order
+        assert!(matches!(&instructions[0], Instruction::Insert(_, 50)));
+    }
+}
