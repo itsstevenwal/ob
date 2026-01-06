@@ -308,6 +308,141 @@ mod tests {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Getter Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_empty_book() {
+        let ob = OrderBook::<TestOrder>::default();
+        assert!(ob.is_empty());
+        assert_eq!(ob.len(), 0);
+        assert_eq!(ob.bid_depth(), 0);
+        assert_eq!(ob.ask_depth(), 0);
+        assert!(ob.best_bid().is_none());
+        assert!(ob.best_ask().is_none());
+        assert!(ob.top_bids(5).is_empty());
+        assert!(ob.top_asks(5).is_empty());
+    }
+
+    #[test]
+    fn test_best_bid() {
+        let mut ob = OrderBook::<TestOrder>::default();
+        setup_order(&mut ob, "b1", true, 100, 50);
+        setup_order(&mut ob, "b2", true, 100, 30); // same price
+        setup_order(&mut ob, "b3", true, 90, 20);
+
+        let (price, qty) = ob.best_bid().unwrap();
+        assert_eq!(price, 100);
+        assert_eq!(qty, 80); // 50 + 30 at price 100
+    }
+
+    #[test]
+    fn test_best_ask() {
+        let mut ob = OrderBook::<TestOrder>::default();
+        setup_order(&mut ob, "s1", false, 100, 50);
+        setup_order(&mut ob, "s2", false, 100, 30); // same price
+        setup_order(&mut ob, "s3", false, 110, 20);
+
+        let (price, qty) = ob.best_ask().unwrap();
+        assert_eq!(price, 100);
+        assert_eq!(qty, 80); // 50 + 30 at price 100
+    }
+
+    #[test]
+    fn test_top_bids() {
+        let mut ob = OrderBook::<TestOrder>::default();
+        setup_order(&mut ob, "b1", true, 100, 50);
+        setup_order(&mut ob, "b2", true, 90, 30);
+        setup_order(&mut ob, "b3", true, 80, 20);
+
+        let levels = ob.top_bids(2);
+        assert_eq!(levels.len(), 2);
+        assert_eq!(levels[0], (100, 50)); // highest first
+        assert_eq!(levels[1], (90, 30));
+
+        // Request more than available
+        let levels = ob.top_bids(10);
+        assert_eq!(levels.len(), 3);
+    }
+
+    #[test]
+    fn test_top_asks() {
+        let mut ob = OrderBook::<TestOrder>::default();
+        setup_order(&mut ob, "s1", false, 100, 50);
+        setup_order(&mut ob, "s2", false, 110, 30);
+        setup_order(&mut ob, "s3", false, 120, 20);
+
+        let levels = ob.top_asks(2);
+        assert_eq!(levels.len(), 2);
+        assert_eq!(levels[0], (100, 50)); // lowest first
+        assert_eq!(levels[1], (110, 30));
+
+        // Request more than available
+        let levels = ob.top_asks(10);
+        assert_eq!(levels.len(), 3);
+    }
+
+    #[test]
+    fn test_depth() {
+        let mut ob = OrderBook::<TestOrder>::default();
+        setup_order(&mut ob, "b1", true, 100, 50);
+        setup_order(&mut ob, "b2", true, 100, 30); // same level
+        setup_order(&mut ob, "b3", true, 90, 20);
+        setup_order(&mut ob, "s1", false, 110, 40);
+
+        assert_eq!(ob.bid_depth(), 2); // 2 price levels
+        assert_eq!(ob.ask_depth(), 1);
+    }
+
+    #[test]
+    fn test_len_and_is_empty() {
+        let mut ob = OrderBook::<TestOrder>::default();
+        assert!(ob.is_empty());
+        assert_eq!(ob.len(), 0);
+
+        setup_order(&mut ob, "b1", true, 100, 50);
+        assert!(!ob.is_empty());
+        assert_eq!(ob.len(), 1);
+
+        setup_order(&mut ob, "b2", true, 100, 30);
+        setup_order(&mut ob, "s1", false, 110, 40);
+        assert_eq!(ob.len(), 3);
+    }
+
+    #[test]
+    fn test_order_lookup() {
+        let mut ob = OrderBook::<TestOrder>::default();
+        setup_order(&mut ob, "b1", true, 100, 50);
+        setup_order(&mut ob, "s1", false, 110, 40);
+
+        let order = ob.order(&String::from("b1")).unwrap();
+        assert_eq!(order.price(), 100);
+        assert_eq!(order.remaining(), 50);
+
+        let order = ob.order(&String::from("s1")).unwrap();
+        assert_eq!(order.price(), 110);
+
+        assert!(ob.order(&String::from("nonexistent")).is_none());
+    }
+
+    #[test]
+    fn test_bids_asks_iterators() {
+        let mut ob = OrderBook::<TestOrder>::default();
+        setup_order(&mut ob, "b1", true, 100, 50);
+        setup_order(&mut ob, "b2", true, 90, 30);
+        setup_order(&mut ob, "s1", false, 110, 40);
+        setup_order(&mut ob, "s2", false, 120, 20);
+
+        // Bids: highest price first
+        let bid_prices: Vec<u64> = ob.bids().map(|o| o.price()).collect();
+        assert_eq!(bid_prices, vec![100, 90]);
+
+        // Asks: lowest price first
+        let ask_prices: Vec<u64> = ob.asks().map(|o| o.price()).collect();
+        assert_eq!(ask_prices, vec![110, 120]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Eval Tests
     // ─────────────────────────────────────────────────────────────────────────
 
