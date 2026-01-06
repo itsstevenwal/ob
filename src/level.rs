@@ -1,5 +1,7 @@
-use crate::list::{Iter, IterMut, List};
-use crate::order::OrderInterface;
+use crate::{
+    list::{Iter, IterMut, List},
+    order::OrderInterface,
+};
 
 /// Represents a price level in the orderbook.
 /// A level contains all orders at a specific price point.

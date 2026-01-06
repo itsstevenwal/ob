@@ -1,8 +1,5 @@
-use crate::hash::FxHashMap;
-use crate::list::Node;
-use crate::order::OrderInterface;
-use crate::side::Side;
-
+use crate::{list::Node, order::OrderInterface, side::Side};
+use std::collections::HashMap;
 /// Represents a complete orderbook with bid and ask sides
 pub struct OrderBook<O: OrderInterface> {
     /// The bid side (buy orders)
@@ -11,10 +8,10 @@ pub struct OrderBook<O: OrderInterface> {
     asks: Side<O>,
 
     // All orders in the orderbook
-    orders: FxHashMap<O::T, *mut Node<O>>,
+    orders: HashMap<O::T, *mut Node<O>>,
 
     // Temporary remaining quantities for the orders
-    temp: FxHashMap<O::T, O::N>,
+    temp: HashMap<O::T, O::N>,
 }
 
 impl<O: OrderInterface> Default for OrderBook<O> {
@@ -22,8 +19,8 @@ impl<O: OrderInterface> Default for OrderBook<O> {
         Self {
             bids: Side::new(true),
             asks: Side::new(false),
-            orders: FxHashMap::default(),
-            temp: FxHashMap::default(),
+            orders: HashMap::default(),
+            temp: HashMap::default(),
         }
     }
 }
@@ -67,7 +64,7 @@ pub enum Instruction<O: OrderInterface> {
 pub struct Match<O: OrderInterface> {
     /// The taker order ID and filled quantity
     pub taker: (O::T, O::N),
-    /// The maker order IDs and their filled quantities (inline up to 8 makers)
+    /// The maker order IDs and their filled quantities
     pub makers: Vec<(O::T, O::N)>,
 }
 

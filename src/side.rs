@@ -1,8 +1,5 @@
-use crate::level::Level;
-use crate::list::Node;
-use crate::order::OrderInterface;
-use std::collections::btree_map;
-use std::collections::BTreeMap;
+use crate::{level::Level, list::Node, order::OrderInterface};
+use std::collections::{BTreeMap, btree_map};
 
 /// Represents one side of an orderbook (either bids or asks)
 /// Uses a BTreeMap to maintain levels sorted by price
