@@ -8,6 +8,7 @@ pub struct Node<T> {
 }
 
 impl<T> Node<T> {
+    #[inline]
     fn new(data: T) -> Box<Self> {
         Box::new(Node {
             data,
@@ -26,6 +27,7 @@ pub struct List<T> {
 
 impl<T> List<T> {
     /// Creates a new empty doubly linked list
+    #[inline]
     pub fn new() -> Self {
         List {
             head: ptr::null_mut(),
@@ -35,17 +37,20 @@ impl<T> List<T> {
     }
 
     /// Returns the length of the list
+    #[inline]
     pub fn len(&self) -> usize {
         self.length
     }
 
     /// Returns true if the list is empty
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.length == 0
     }
 
     /// Adds an element to the back of the list
     /// Returns the pointer address of the newly inserted node
+    #[inline(always)]
     pub fn push_back(&mut self, data: T) -> *mut Node<T> {
         let new_node = Box::into_raw(Node::new(data));
 
@@ -67,6 +72,7 @@ impl<T> List<T> {
     /// Removes and returns the pointer address from the front of the list
     /// Returns None if the list is empty
     /// Note: The caller is responsible for deallocating the node if needed
+    #[inline]
     pub fn pop_front(&mut self) -> Option<*mut Node<T>> {
         if self.head.is_null() || self.length == 0 {
             return None;
@@ -93,6 +99,7 @@ impl<T> List<T> {
     ///
     /// # Safety
     /// The caller must ensure the pointer is valid and points to a node in this list
+    #[inline(always)]
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn remove(&mut self, node_ptr: *mut Node<T>) -> Option<T> {
         if node_ptr.is_null() || self.length == 0 {
@@ -160,6 +167,7 @@ pub struct Iter<'a, T> {
 impl<'a, T> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         if self.current.is_null() {
             return None;
@@ -182,6 +190,7 @@ pub struct IterMut<'a, T> {
 impl<'a, T> Iterator for IterMut<'a, T> {
     type Item = &'a mut T;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         if self.current.is_null() {
             return None;
@@ -207,6 +216,7 @@ impl<T> IntoIterator for List<T> {
 
 impl<T> List<T> {
     /// Returns an iterator over the list that borrows the list
+    #[inline]
     pub fn iter(&self) -> Iter<'_, T> {
         Iter {
             current: self.head,
@@ -215,6 +225,7 @@ impl<T> List<T> {
     }
 
     /// Returns a mutable iterator over the list that borrows the list mutably
+    #[inline]
     pub fn iter_mut(&mut self) -> IterMut<'_, T> {
         IterMut {
             current: self.head,

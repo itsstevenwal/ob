@@ -1,7 +1,8 @@
 use crate::list::Node;
 use crate::order::OrderInterface;
 use crate::side::Side;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
+use smallvec::SmallVec;
 
 /// Represents a complete orderbook with bid and ask sides
 pub struct OrderBook<O: OrderInterface> {
@@ -11,10 +12,10 @@ pub struct OrderBook<O: OrderInterface> {
     asks: Side<O>,
 
     // All orders in the orderbook
-    orders: HashMap<O::T, *mut Node<O>>,
+    orders: FxHashMap<O::T, *mut Node<O>>,
 
     // Temporary remaining quantities for the orders
-    temp: HashMap<O::T, O::N>,
+    temp: FxHashMap<O::T, O::N>,
 }
 
 impl<O: OrderInterface> Default for OrderBook<O> {
@@ -22,8 +23,8 @@ impl<O: OrderInterface> Default for OrderBook<O> {
         Self {
             bids: Side::new(true),
             asks: Side::new(false),
-            orders: HashMap::new(),
-            temp: HashMap::new(),
+            orders: FxHashMap::default(),
+            temp: FxHashMap::default(),
         }
     }
 }
@@ -67,12 +68,13 @@ pub enum Instruction<O: OrderInterface> {
 pub struct Match<O: OrderInterface> {
     /// The taker order ID and filled quantity
     pub taker: (O::T, O::N),
-    /// The maker order IDs and their filled quantities
-    pub makers: Vec<(O::T, O::N)>,
+    /// The maker order IDs and their filled quantities (inline up to 8 makers)
+    pub makers: SmallVec<[(O::T, O::N); 8]>,
 }
 
 impl<O: OrderInterface> OrderBook<O> {
     /// Applies a list of instructions to the orderbook, mutating state
+    #[inline]
     pub fn apply(&mut self, instructions: Vec<Instruction<O>>) {
         for instruction in instructions {
             match instruction {
@@ -93,6 +95,7 @@ impl<O: OrderInterface> OrderBook<O> {
     }
 
     /// Inserts an order with the given remaining quantity
+    #[inline(always)]
     fn apply_insert(&mut self, mut order: O, remaining: O::N) {
         let filled = order.quantity() - remaining;
         if filled > O::N::default() {
@@ -111,6 +114,7 @@ impl<O: OrderInterface> OrderBook<O> {
     }
 
     /// Deletes an order by its ID
+    #[inline(always)]
     fn apply_delete(&mut self, order_id: &O::T) {
         let node_ptr = if let Some(&ptr) = self.orders.get(order_id) {
             ptr
@@ -130,6 +134,7 @@ impl<O: OrderInterface> OrderBook<O> {
     }
 
     /// Fills an order by the given quantity, removing it if fully filled
+    #[inline(always)]
     fn apply_fill(&mut self, order_id: &O::T, quantity: O::N) {
         let node_ptr = if let Some(&ptr) = self.orders.get(order_id) {
             ptr
@@ -151,6 +156,7 @@ impl<O: OrderInterface> OrderBook<O> {
     }
 
     // Eval
+    #[inline]
     pub fn eval(&mut self, ops: Vec<Op<O>>) -> (Vec<Match<O>>, Vec<Instruction<O>>) {
         let mut matches = Vec::new();
         let mut instructions = Vec::new();
@@ -174,29 +180,20 @@ impl<O: OrderInterface> OrderBook<O> {
         (matches, instructions)
     }
 
+    #[inline(always)]
     pub fn eval_insert(&mut self, order: O) -> (Option<Match<O>>, Vec<Instruction<O>>) {
         if self.orders.contains_key(order.id()) {
-            return (None, vec![Instruction::NoOp(Msg::OrderAlreadyExists)]);
+            return self.eval_insert_duplicate();
         }
 
         let mut remaining_quantity = order.remaining();
         let mut taker_quantity = O::N::default();
-        let mut maker_quantities = Vec::new();
-        let mut instructions = Vec::new();
+        let mut maker_quantities: SmallVec<[(O::T, O::N); 8]> = SmallVec::new();
+        let mut instructions = Vec::with_capacity(16);
         let is_buy = order.is_buy();
-
         let price = order.price();
 
-        let check_fn = if is_buy {
-            // For a buy order, stop matching when the price is less than the resting order price
-            |price: O::N, resting_order: &O| price >= resting_order.price()
-        } else {
-            // For a sell order, stop matching when the price is greater than the resting order price
-            |price: O::N, resting_order: &O| price <= resting_order.price()
-        };
-
         // Match against the opposite side and collect orders to remove
-
         let opposite_book = if is_buy {
             &mut self.asks
         } else {
@@ -204,13 +201,20 @@ impl<O: OrderInterface> OrderBook<O> {
         };
 
         for resting_order in opposite_book.iter_mut() {
-            if check_fn(price, resting_order) && remaining_quantity > O::N::default() {
+            // Inline price check - for buys: price >= resting, for sells: price <= resting
+            let price_matches = if is_buy {
+                price >= resting_order.price()
+            } else {
+                price <= resting_order.price()
+            };
+
+            if price_matches && remaining_quantity > O::N::default() {
                 // Check if the resting order has been partially filled in temp state
-                let remaining = if let Some(rm) = self.temp.get(resting_order.id()) {
-                    *rm
-                } else {
-                    resting_order.remaining()
-                };
+                let remaining = self
+                    .temp
+                    .get(resting_order.id())
+                    .copied()
+                    .unwrap_or_else(|| resting_order.remaining());
 
                 if remaining == O::N::default() {
                     // Resting order is fully filled or cancelled, skip it
@@ -244,21 +248,37 @@ impl<O: OrderInterface> OrderBook<O> {
             None
         };
 
+        // Insert at front without O(n) shift - push then rotate
         if remaining_quantity > O::N::default() {
-            instructions.insert(0, Instruction::Insert(order, remaining_quantity));
+            instructions.push(Instruction::Insert(order, remaining_quantity));
+            // Rotate last element to front: O(n) but avoids reallocation
+            instructions.rotate_right(1);
         }
 
         (match_result, instructions)
     }
 
+    #[cold]
+    #[inline(never)]
+    fn eval_insert_duplicate(&self) -> (Option<Match<O>>, Vec<Instruction<O>>) {
+        (None, vec![Instruction::NoOp(Msg::OrderAlreadyExists)])
+    }
+
+    #[inline(always)]
     pub fn eval_cancel(&mut self, order_id: O::T) -> Instruction<O> {
         if !self.orders.contains_key(&order_id) {
-            return Instruction::NoOp(Msg::OrderNotFound);
+            return Self::eval_cancel_not_found();
         }
 
         self.temp.insert(order_id.clone(), O::N::default());
 
         Instruction::Delete(order_id)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn eval_cancel_not_found() -> Instruction<O> {
+        Instruction::NoOp(Msg::OrderNotFound)
     }
 }
 

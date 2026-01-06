@@ -1,6 +1,7 @@
 use crate::level::Level;
 use crate::list::Node;
 use crate::order::OrderInterface;
+use std::collections::btree_map;
 use std::collections::BTreeMap;
 
 /// Represents one side of an orderbook (either bids or asks)
@@ -14,6 +15,7 @@ pub struct Side<O: OrderInterface> {
 
 impl<O: OrderInterface> Side<O> {
     /// Creates a new empty side
+    #[inline]
     pub fn new(is_bid: bool) -> Self {
         Side {
             is_bid,
@@ -22,15 +24,18 @@ impl<O: OrderInterface> Side<O> {
     }
 
     /// Returns the height of the side
+    #[inline]
     pub fn height(&self) -> usize {
         self.levels.len()
     }
 
     /// Returns true if this side is empty
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.levels.is_empty()
     }
 
+    #[inline(always)]
     pub fn insert_order(&mut self, order: O) -> *mut Node<O> {
         let price = order.price();
         if let Some(level) = self.levels.get_mut(&price) {
@@ -47,6 +52,7 @@ impl<O: OrderInterface> Side<O> {
     ///
     /// # Safety
     /// The caller must ensure node_ptr is valid and points to a node in this side
+    #[inline(always)]
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn fill_order(&mut self, node_ptr: *mut Node<O>, fill: O::N) -> bool {
         let order = unsafe { &mut (*node_ptr).data };
@@ -69,6 +75,7 @@ impl<O: OrderInterface> Side<O> {
     ///
     /// # Safety
     /// The caller must ensure node_ptr is valid and points to a node in this side
+    #[inline(always)]
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn remove_order(&mut self, node_ptr: *mut Node<O>) {
         let price = unsafe { (*node_ptr).data.price() };
@@ -87,100 +94,180 @@ impl<O: OrderInterface> Side<O> {
     /// Returns an iterator over all orders in this side
     /// For bids: orders are returned with higher prices first
     /// For asks: orders are returned with lower prices first
+    #[inline]
     pub fn iter(&self) -> OrderIter<'_, O> {
-        OrderIter {
-            levels_iter: if self.is_bid {
-                // For bids, iterate in descending order (higher price first)
-                Box::new(self.levels.iter().rev())
-            } else {
-                // For asks, iterate in ascending order (lower price first)
-                Box::new(self.levels.iter())
-            },
-            current_order_iter: None,
+        if self.is_bid {
+            OrderIter::Rev(OrderIterRev {
+                levels_iter: self.levels.iter().rev(),
+                current_order_iter: None,
+            })
+        } else {
+            OrderIter::Fwd(OrderIterFwd {
+                levels_iter: self.levels.iter(),
+                current_order_iter: None,
+            })
         }
     }
 
     /// Returns a mutable iterator over all orders in this side
     /// For bids: orders are returned with higher prices first
     /// For asks: orders are returned with lower prices first
+    #[inline]
     pub fn iter_mut(&mut self) -> OrderIterMut<'_, O> {
-        OrderIterMut {
-            levels_iter: if self.is_bid {
-                // For bids, iterate in descending order (higher price first)
-                Box::new(self.levels.iter_mut().rev())
-            } else {
-                // For asks, iterate in ascending order (lower price first)
-                Box::new(self.levels.iter_mut())
-            },
-            current_order_iter: None,
+        if self.is_bid {
+            OrderIterMut::Rev(OrderIterMutRev {
+                levels_iter: self.levels.iter_mut().rev(),
+                current_order_iter: None,
+            })
+        } else {
+            OrderIterMut::Fwd(OrderIterMutFwd {
+                levels_iter: self.levels.iter_mut(),
+                current_order_iter: None,
+            })
         }
     }
 }
 
-/// Iterator over levels, supporting both forward and reverse iteration
-/// Uses type erasure to unify forward and reverse iterators
-type LevelIter<'a, T, O> = Box<dyn Iterator<Item = (&'a T, &'a Level<O>)> + 'a>;
-
-/// Mutable iterator over levels, supporting both forward and reverse iteration
-/// Uses type erasure to unify forward and reverse iterators
-type LevelIterMut<'a, T, O> = Box<dyn Iterator<Item = (&'a T, &'a mut Level<O>)> + 'a>;
-
-/// Iterator over orders in a side
-pub struct OrderIter<'a, O: OrderInterface> {
-    levels_iter: LevelIter<'a, O::N, O>,
+/// Forward iterator over orders (for asks - lowest price first)
+pub struct OrderIterFwd<'a, O: OrderInterface> {
+    levels_iter: btree_map::Iter<'a, O::N, Level<O>>,
     current_order_iter: Option<crate::list::Iter<'a, O>>,
+}
+
+/// Reverse iterator over orders (for bids - highest price first)
+pub struct OrderIterRev<'a, O: OrderInterface> {
+    levels_iter: std::iter::Rev<btree_map::Iter<'a, O::N, Level<O>>>,
+    current_order_iter: Option<crate::list::Iter<'a, O>>,
+}
+
+/// Enum-based iterator to avoid Box<dyn> overhead
+pub enum OrderIter<'a, O: OrderInterface> {
+    Fwd(OrderIterFwd<'a, O>),
+    Rev(OrderIterRev<'a, O>),
+}
+
+impl<'a, O: OrderInterface> Iterator for OrderIterFwd<'a, O> {
+    type Item = &'a O;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(ref mut order_iter) = self.current_order_iter {
+                if let Some(order) = order_iter.next() {
+                    return Some(order);
+                }
+            }
+            self.current_order_iter = None;
+            if let Some((_, level)) = self.levels_iter.next() {
+                self.current_order_iter = Some(level.iter());
+            } else {
+                return None;
+            }
+        }
+    }
+}
+
+impl<'a, O: OrderInterface> Iterator for OrderIterRev<'a, O> {
+    type Item = &'a O;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(ref mut order_iter) = self.current_order_iter {
+                if let Some(order) = order_iter.next() {
+                    return Some(order);
+                }
+            }
+            self.current_order_iter = None;
+            if let Some((_, level)) = self.levels_iter.next() {
+                self.current_order_iter = Some(level.iter());
+            } else {
+                return None;
+            }
+        }
+    }
 }
 
 impl<'a, O: OrderInterface> Iterator for OrderIter<'a, O> {
     type Item = &'a O;
 
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            OrderIter::Fwd(iter) => iter.next(),
+            OrderIter::Rev(iter) => iter.next(),
+        }
+    }
+}
+
+/// Forward mutable iterator over orders (for asks)
+pub struct OrderIterMutFwd<'a, O: OrderInterface> {
+    levels_iter: btree_map::IterMut<'a, O::N, Level<O>>,
+    current_order_iter: Option<crate::list::IterMut<'a, O>>,
+}
+
+/// Reverse mutable iterator over orders (for bids)
+pub struct OrderIterMutRev<'a, O: OrderInterface> {
+    levels_iter: std::iter::Rev<btree_map::IterMut<'a, O::N, Level<O>>>,
+    current_order_iter: Option<crate::list::IterMut<'a, O>>,
+}
+
+/// Enum-based mutable iterator to avoid Box<dyn> overhead
+pub enum OrderIterMut<'a, O: OrderInterface> {
+    Fwd(OrderIterMutFwd<'a, O>),
+    Rev(OrderIterMutRev<'a, O>),
+}
+
+impl<'a, O: OrderInterface> Iterator for OrderIterMutFwd<'a, O> {
+    type Item = &'a mut O;
+
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            // If we have a current order iterator, try to get the next order from it
             if let Some(ref mut order_iter) = self.current_order_iter {
                 if let Some(order) = order_iter.next() {
                     return Some(order);
                 }
             }
-
-            // Current level exhausted, move to next level
             self.current_order_iter = None;
             if let Some((_, level)) = self.levels_iter.next() {
-                self.current_order_iter = Some(level.iter());
+                self.current_order_iter = Some(level.iter_mut());
             } else {
-                // No more levels
                 return None;
             }
         }
     }
 }
 
-/// Mutable iterator over orders in a side
-pub struct OrderIterMut<'a, O: OrderInterface> {
-    levels_iter: LevelIterMut<'a, O::N, O>,
-    current_order_iter: Option<crate::list::IterMut<'a, O>>,
-}
-
-impl<'a, O: OrderInterface> Iterator for OrderIterMut<'a, O> {
+impl<'a, O: OrderInterface> Iterator for OrderIterMutRev<'a, O> {
     type Item = &'a mut O;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            // If we have a current order iterator, try to get the next order from it
             if let Some(ref mut order_iter) = self.current_order_iter {
                 if let Some(order) = order_iter.next() {
                     return Some(order);
                 }
             }
-
-            // Current level exhausted, move to next level
             self.current_order_iter = None;
             if let Some((_, level)) = self.levels_iter.next() {
                 self.current_order_iter = Some(level.iter_mut());
             } else {
-                // No more levels
                 return None;
             }
+        }
+    }
+}
+
+impl<'a, O: OrderInterface> Iterator for OrderIterMut<'a, O> {
+    type Item = &'a mut O;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            OrderIterMut::Fwd(iter) => iter.next(),
+            OrderIterMut::Rev(iter) => iter.next(),
         }
     }
 }
