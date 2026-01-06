@@ -4,11 +4,8 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
 };
 
-/// Trait defining the interface for orders in the orderbook
-/// This allows for different order implementations while maintaining a common interface
-///
-/// T: The type of the order identifier. Needs to be unique.
-/// N: The numeric type used in the orderbook. Needs to be a number.
+/// Trait defining the interface for orders in the orderbook.
+/// T: Order identifier type (must be unique). N: Numeric type.
 pub trait OrderInterface {
     type T: Eq + Display + Default + Hash + Clone;
     type N: Ord
@@ -26,21 +23,16 @@ pub trait OrderInterface {
         + DivAssign;
 
     fn id(&self) -> &Self::T;
-
     fn is_buy(&self) -> bool;
-
     fn price(&self) -> Self::N;
 
-    /// Returns the original quantity of this order
-    /// Not updated when the order is filled.
+    /// Original quantity (not updated on fill).
     fn quantity(&self) -> Self::N;
 
-    /// Returns the remaining quantity of this order
-    /// Updated when the order is filled.
+    /// Remaining quantity (updated on fill).
     fn remaining(&self) -> Self::N;
 
-    /// Fills the order with the specified quantity
-    /// Updates the remaining quantity.
+    /// Fill the order, updating remaining quantity.
     fn fill(&mut self, quantity: Self::N);
 }
 

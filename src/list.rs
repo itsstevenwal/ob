@@ -1,6 +1,6 @@
 use std::ptr;
 
-/// A node in the doubly linked list
+/// A node in the doubly linked list.
 pub struct Node<T> {
     pub data: T,
     pub prev: *mut Node<T>,
@@ -18,7 +18,7 @@ impl<T> Node<T> {
     }
 }
 
-/// A doubly linked list implementation using unsafe raw pointers
+/// A doubly linked list using unsafe raw pointers.
 pub struct List<T> {
     head: *mut Node<T>,
     tail: *mut Node<T>,
@@ -26,7 +26,6 @@ pub struct List<T> {
 }
 
 impl<T> List<T> {
-    /// Creates a new empty doubly linked list
     #[inline]
     pub fn new() -> Self {
         List {
@@ -36,27 +35,22 @@ impl<T> List<T> {
         }
     }
 
-    /// Returns the length of the list
     #[inline]
     pub fn len(&self) -> usize {
         self.length
     }
 
-    /// Returns true if the list is empty
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.length == 0
     }
 
-    /// Adds an element to the back of the list
-    /// Returns the pointer address of the newly inserted node
+    /// Returns pointer to the newly inserted node.
     #[inline(always)]
     pub fn push_back(&mut self, data: T) -> *mut Node<T> {
         let new_node = Box::into_raw(Node::new(data));
-
         unsafe {
             if self.tail.is_null() {
-                // Empty list
                 self.head = new_node;
             } else {
                 (*self.tail).next = new_node;
@@ -64,70 +58,50 @@ impl<T> List<T> {
             }
             self.tail = new_node;
         }
-
         self.length += 1;
         new_node
     }
 
-    /// Removes and returns the pointer address from the front of the list
-    /// Returns None if the list is empty
-    /// Note: The caller is responsible for deallocating the node if needed
     #[inline]
     pub fn pop_front(&mut self) -> Option<*mut Node<T>> {
         if self.head.is_null() || self.length == 0 {
             return None;
         }
-
         unsafe {
             let old_head = self.head;
             self.head = (*old_head).next;
-
             if self.head.is_null() {
-                // This was the only node
                 self.tail = ptr::null_mut();
             } else {
                 (*self.head).prev = ptr::null_mut();
             }
-
             self.length -= 1;
             Some(old_head)
         }
     }
 
-    /// Removes the node at the given pointer from the list
-    /// Returns the data from the removed node, or None if the pointer is null
-    ///
-    /// # Safety
-    /// The caller must ensure the pointer is valid and points to a node in this list
+    /// Removes node at pointer. Caller must ensure pointer is valid and in this list.
     #[inline(always)]
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn remove(&mut self, node_ptr: *mut Node<T>) -> Option<T> {
         if node_ptr.is_null() || self.length == 0 {
             return None;
         }
-
         unsafe {
             let prev = (*node_ptr).prev;
             let next = (*node_ptr).next;
-
-            // Update adjacent nodes' pointers
             if prev.is_null() {
-                // Removing head
                 self.head = next;
             } else {
                 (*prev).next = next;
             }
-
             if next.is_null() {
-                // Removing tail
                 self.tail = prev;
             } else {
                 (*next).prev = prev;
             }
-
             self.length -= 1;
-            let boxed_node = Box::from_raw(node_ptr);
-            Some(boxed_node.data)
+            Some(Box::from_raw(node_ptr).data)
         }
     }
 }
@@ -144,21 +118,22 @@ impl<T> Drop for List<T> {
     }
 }
 
-/// An iterator over the doubly linked list that consumes the list
+// ─────────────────────────────────────────────────────────────────────────────
+// Iterators
+// ─────────────────────────────────────────────────────────────────────────────
+
 pub struct IntoIter<T>(List<T>);
 
 impl<T> Iterator for IntoIter<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.pop_front().map(|node_ptr| unsafe {
-            let boxed_node = Box::from_raw(node_ptr);
-            boxed_node.data
-        })
+        self.0
+            .pop_front()
+            .map(|node_ptr| unsafe { Box::from_raw(node_ptr).data })
     }
 }
 
-/// An iterator over the doubly linked list that borrows the list
 pub struct Iter<'a, T> {
     current: *mut Node<T>,
     _marker: std::marker::PhantomData<&'a T>,
@@ -172,7 +147,6 @@ impl<'a, T> Iterator for Iter<'a, T> {
         if self.current.is_null() {
             return None;
         }
-
         unsafe {
             let data = &(*self.current).data;
             self.current = (*self.current).next;
@@ -181,7 +155,6 @@ impl<'a, T> Iterator for Iter<'a, T> {
     }
 }
 
-/// A mutable iterator over the doubly linked list that borrows the list mutably
 pub struct IterMut<'a, T> {
     current: *mut Node<T>,
     _marker: std::marker::PhantomData<&'a mut T>,
@@ -195,7 +168,6 @@ impl<'a, T> Iterator for IterMut<'a, T> {
         if self.current.is_null() {
             return None;
         }
-
         unsafe {
             let data = &mut (*self.current).data;
             let next = (*self.current).next;
@@ -215,7 +187,6 @@ impl<T> IntoIterator for List<T> {
 }
 
 impl<T> List<T> {
-    /// Returns an iterator over the list that borrows the list
     #[inline]
     pub fn iter(&self) -> Iter<'_, T> {
         Iter {
@@ -224,7 +195,6 @@ impl<T> List<T> {
         }
     }
 
-    /// Returns a mutable iterator over the list that borrows the list mutably
     #[inline]
     pub fn iter_mut(&mut self) -> IterMut<'_, T> {
         IterMut {
@@ -258,7 +228,6 @@ mod tests {
         list.push_back(1);
         list.push_back(2);
         list.push_back(3);
-
         assert_eq!(list.len(), 3);
         assert_eq!(list.iter().last().unwrap(), &3);
     }
@@ -272,21 +241,15 @@ mod tests {
 
         let node1 = list.pop_front().unwrap();
         assert_eq!(unsafe { (*node1).data }, 1);
-        unsafe {
-            let _ = Box::from_raw(node1);
-        }
+        unsafe { let _ = Box::from_raw(node1); }
 
         let node2 = list.pop_front().unwrap();
         assert_eq!(unsafe { (*node2).data }, 2);
-        unsafe {
-            let _ = Box::from_raw(node2);
-        }
+        unsafe { let _ = Box::from_raw(node2); }
 
         let node3 = list.pop_front().unwrap();
         assert_eq!(unsafe { (*node3).data }, 3);
-        unsafe {
-            let _ = Box::from_raw(node3);
-        }
+        unsafe { let _ = Box::from_raw(node3); }
 
         assert_eq!(list.pop_front(), None);
         assert!(list.is_empty());
@@ -299,7 +262,6 @@ mod tests {
         list.push_back(1);
         list.push_back(2);
         list.push_back(3);
-
         let vec: Vec<i32> = list.into_iter().collect();
         assert_eq!(vec, vec![1, 2, 3]);
     }
@@ -310,7 +272,6 @@ mod tests {
         for i in 0..100 {
             list.push_back(i);
         }
-        // List should be properly cleaned up when it goes out of scope
     }
 
     #[test]
@@ -319,11 +280,8 @@ mod tests {
         list.push_back(1);
         list.push_back(2);
         list.push_back(3);
-
         let vec: Vec<&i32> = list.iter().collect();
         assert_eq!(vec, vec![&1, &2, &3]);
-
-        // List should still have all elements
         assert_eq!(list.len(), 3);
     }
 
@@ -333,15 +291,11 @@ mod tests {
         list.push_back(1);
         list.push_back(2);
         list.push_back(3);
-
         for item in list.iter_mut() {
             *item *= 2;
         }
-
         let vec: Vec<&i32> = list.iter().collect();
         assert_eq!(vec, vec![&2, &4, &6]);
-
-        // List should still have all elements
         assert_eq!(list.len(), 3);
     }
 
@@ -349,7 +303,6 @@ mod tests {
     fn test_remove_null_pointer() {
         let mut list = List::new();
         list.push_back(1);
-
         let result = list.remove(std::ptr::null_mut());
         assert_eq!(result, None);
         assert_eq!(list.len(), 1);
@@ -361,11 +314,9 @@ mod tests {
         let node1 = list.push_back(1);
         list.push_back(2);
         list.push_back(3);
-
         let removed = list.remove(node1);
         assert_eq!(removed, Some(1));
         assert_eq!(list.len(), 2);
-
         let vec: Vec<&i32> = list.iter().collect();
         assert_eq!(vec, vec![&2, &3]);
     }
@@ -376,11 +327,9 @@ mod tests {
         list.push_back(1);
         list.push_back(2);
         let node3 = list.push_back(3);
-
         let removed = list.remove(node3);
         assert_eq!(removed, Some(3));
         assert_eq!(list.len(), 2);
-
         let vec: Vec<&i32> = list.iter().collect();
         assert_eq!(vec, vec![&1, &2]);
     }
@@ -391,11 +340,9 @@ mod tests {
         list.push_back(1);
         let node2 = list.push_back(2);
         list.push_back(3);
-
         let removed = list.remove(node2);
         assert_eq!(removed, Some(2));
         assert_eq!(list.len(), 2);
-
         let vec: Vec<&i32> = list.iter().collect();
         assert_eq!(vec, vec![&1, &3]);
     }
@@ -404,12 +351,10 @@ mod tests {
     fn test_remove_only_node() {
         let mut list = List::new();
         let node1 = list.push_back(1);
-
         let removed = list.remove(node1);
         assert_eq!(removed, Some(1));
         assert_eq!(list.len(), 0);
         assert!(list.is_empty());
-
         let vec: Vec<&i32> = list.iter().collect();
         assert_eq!(vec, Vec::<&i32>::new());
     }
@@ -423,31 +368,24 @@ mod tests {
         let node4 = list.push_back(4);
         let node5 = list.push_back(5);
 
-        // Remove middle node
         let removed = list.remove(node3);
         assert_eq!(removed, Some(3));
         assert_eq!(list.len(), 4);
-
         let vec: Vec<&i32> = list.iter().collect();
         assert_eq!(vec, vec![&1, &2, &4, &5]);
 
-        // Remove tail
         let removed = list.remove(node5);
         assert_eq!(removed, Some(5));
         assert_eq!(list.len(), 3);
-
         let vec: Vec<&i32> = list.iter().collect();
         assert_eq!(vec, vec![&1, &2, &4]);
 
-        // Remove head
         let removed = list.remove(node1);
         assert_eq!(removed, Some(1));
         assert_eq!(list.len(), 2);
-
         let vec: Vec<&i32> = list.iter().collect();
         assert_eq!(vec, vec![&2, &4]);
 
-        // Remove remaining nodes
         let removed = list.remove(node2);
         assert_eq!(removed, Some(2));
         assert_eq!(list.len(), 1);

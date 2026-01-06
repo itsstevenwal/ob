@@ -1,97 +1,77 @@
 use crate::{
-    list::{Iter, IterMut, List},
+    list::{Iter, IterMut, List, Node},
     order::OrderInterface,
 };
 
-/// Represents a price level in the orderbook.
-/// A level contains all orders at a specific price point.
+/// A price level containing all orders at a specific price point.
 pub struct Level<O: OrderInterface> {
     price: O::N,
     orders: List<O>,
-
-    /// Total quantity across all orders at this level.
-    /// Cached for performance.
+    /// Total quantity across all orders (cached for performance).
     total_quantity: O::N,
 }
 
 impl<O: OrderInterface> Level<O> {
     #[inline]
     pub fn new(price: O::N) -> Self {
-        Level {
+        Self {
             price,
             orders: List::new(),
             total_quantity: O::N::default(),
         }
     }
 
-    /// Returns the price of this level
     #[inline]
     pub fn price(&self) -> O::N {
         self.price
     }
 
-    /// Returns the total quantity of all orders at this level
     #[inline]
     pub fn total_quantity(&self) -> O::N {
         self.total_quantity
     }
 
-    /// Returns the number of orders at this level
     #[inline]
     pub fn len(&self) -> usize {
         self.orders.len()
     }
 
-    /// Returns true if this level has no orders
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.orders.is_empty()
     }
 
-    /// Adds an order to this level
-    /// Orders are added to the back (FIFO order)
-    /// Returns a pointer to the newly inserted node
+    /// Adds an order to this level (FIFO). Returns pointer to the inserted node.
     #[inline(always)]
-    pub fn add_order(&mut self, order: O) -> *mut crate::list::Node<O> {
+    pub fn add_order(&mut self, order: O) -> *mut Node<O> {
         self.total_quantity += order.remaining();
         self.orders.push_back(order)
     }
 
-    /// Fills an order and returns true if the order is fully filled
+    /// Fills an order and returns true if fully filled.
     #[inline(always)]
-    pub fn fill_order(
-        &mut self,
-        node_ptr: *mut crate::list::Node<O>,
-        order: &mut O,
-        fill: O::N,
-    ) -> bool {
+    pub fn fill_order(&mut self, node_ptr: *mut Node<O>, order: &mut O, fill: O::N) -> bool {
         order.fill(fill);
         self.total_quantity -= fill;
-
         if order.remaining() == O::N::default() {
             self.orders.remove(node_ptr);
             return true;
         }
-
         false
     }
 
-    /// Removes an order by its pointer
     #[inline(always)]
-    pub fn remove_order(&mut self, node_ptr: *mut crate::list::Node<O>) {
-        let removed = self.orders.remove(node_ptr);
-        if let Some(ref order) = removed {
+    pub fn remove_order(&mut self, node_ptr: *mut Node<O>) {
+        if let Some(ref order) = self.orders.remove(node_ptr) {
             self.total_quantity -= order.remaining();
         }
     }
 
-    /// Returns an iterator over the orders at this level
     #[inline(always)]
     pub fn iter(&self) -> Iter<'_, O> {
         self.orders.iter()
     }
 
-    /// Returns a mutable iterator over the orders at this level
     #[inline(always)]
     pub fn iter_mut(&mut self) -> IterMut<'_, O> {
         self.orders.iter_mut()
@@ -115,9 +95,7 @@ mod tests {
     #[test]
     fn test_add_order() {
         let mut level = Level::<TestOrder>::new(100);
-        let order = TestOrder::new("1", true, 100, 50);
-
-        level.add_order(order);
+        level.add_order(TestOrder::new("1", true, 100, 50));
         assert_eq!(level.total_quantity(), 50);
         assert_eq!(level.len(), 1);
         assert!(!level.is_empty());
@@ -129,7 +107,6 @@ mod tests {
         level.add_order(TestOrder::new("1", true, 100, 50));
         level.add_order(TestOrder::new("2", true, 100, 30));
         level.add_order(TestOrder::new("3", true, 100, 20));
-
         assert_eq!(level.total_quantity(), 100);
         assert_eq!(level.len(), 3);
     }
@@ -140,7 +117,6 @@ mod tests {
         level.add_order(TestOrder::new("1", true, 100, 50));
         let node_ptr = level.add_order(TestOrder::new("2", true, 100, 30));
         level.add_order(TestOrder::new("3", true, 100, 20));
-
         level.remove_order(node_ptr);
         assert_eq!(level.total_quantity(), 70);
         assert_eq!(level.len(), 2);
@@ -150,9 +126,7 @@ mod tests {
     fn test_remove_nonexistent_order() {
         let mut level = Level::<TestOrder>::new(100);
         level.add_order(TestOrder::new("1", true, 50, 50));
-
-        let null_ptr = std::ptr::null_mut();
-        level.remove_order(null_ptr);
+        level.remove_order(std::ptr::null_mut());
         assert_eq!(level.total_quantity(), 50);
         assert_eq!(level.len(), 1);
     }
