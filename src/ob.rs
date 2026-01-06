@@ -1,7 +1,7 @@
+use crate::hash::FxHashMap;
 use crate::list::Node;
 use crate::order::OrderInterface;
 use crate::side::Side;
-use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 /// Represents a complete orderbook with bid and ask sides
