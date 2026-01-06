@@ -1,6 +1,6 @@
 # ob
 
-A high-performance, price-time priority orderbook implementation in Rust.
+A single threaded price-time priority orderbook implementation in Rust.
 
 ## Features
 
@@ -68,7 +68,7 @@ cargo bench
 | `with_depth/insert_depth_1000` | 73.19 ns | 13.7 M ops/s |
 | `with_depth/insert_depth_10000` | 80.40 ns | 12.4 M ops/s |
 
-*Measured on Apple Silicon. Results may vary.*
+*Measured on Apple Silicon M4 Max.*
 
 ## License
 

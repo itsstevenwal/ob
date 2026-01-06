@@ -11,7 +11,7 @@ env:
 
 jobs:
   test:
-    name: Test
+    name: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
         run: cargo test --verbose
 
   clippy:
-    name: Clippy
+    name: clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
         run: cargo clippy -- -D warnings
 
   fmt:
-    name: Format
+    name: format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +62,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   coverage:
-    name: Code Coverage
+    name: coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
