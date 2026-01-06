@@ -57,16 +57,28 @@ cargo bench
 
 ### Benchmark Results
 
-| Benchmark | Time | Throughput |
-|-----------|------|------------|
-| `insert/insert_no_match` | 79.26 ns | 12.6 M ops/s |
-| `match/match_single` | 137.02 ns | 7.3 M ops/s |
-| `match/match_multi_maker` | 589.15 ns | 1.7 M ops/s |
-| `cancel/cancel` | 96.67 ns | 10.3 M ops/s |
-| `mixed/realistic_1000_ops` | 151.98 µs | 6.6 M ops/s |
-| `with_depth/insert_depth_100` | 74.37 ns | 13.4 M ops/s |
-| `with_depth/insert_depth_1000` | 73.19 ns | 13.7 M ops/s |
-| `with_depth/insert_depth_10000` | 80.40 ns | 12.4 M ops/s |
+#### Insert Operations
+
+| Benchmark | Eval | Apply |
+|-----------|------|-------|
+| Empty book | 24.7 ns (40.5 M/s) | 93.8 ns (10.7 M/s) |
+| Depth 1,000 | 46.3 ns (21.6 M/s) | 74.2 ns (13.5 M/s) |
+| Depth 10,000 | 61.4 ns (16.3 M/s) | 91.0 ns (11.0 M/s) |
+
+#### Cancel Operations
+
+| Benchmark | Eval | Apply |
+|-----------|------|-------|
+| Depth 1,000 | 63.3 ns (15.8 M/s) | 177.9 ns (5.6 M/s) |
+| Depth 10,000 | 72.4 ns (13.8 M/s) | 303.3 ns (3.3 M/s) |
+
+#### Match Operations
+
+| Benchmark | Eval | Apply |
+|-----------|------|-------|
+| 1 level | 83.8 ns (11.9 M/s) | 80.1 ns (12.5 M/s) |
+| 10 levels | 609.2 ns (1.6 M/s) | 584.6 ns (1.7 M/s) |
+| 100 levels | 4.62 µs (216 K/s) | 7.44 µs (134 K/s) |
 
 *Measured on Apple Silicon M4 Max.*
 
