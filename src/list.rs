@@ -241,15 +241,21 @@ mod tests {
 
         let node1 = list.pop_front().unwrap();
         assert_eq!(unsafe { (*node1).data }, 1);
-        unsafe { let _ = Box::from_raw(node1); }
+        unsafe {
+            let _ = Box::from_raw(node1);
+        }
 
         let node2 = list.pop_front().unwrap();
         assert_eq!(unsafe { (*node2).data }, 2);
-        unsafe { let _ = Box::from_raw(node2); }
+        unsafe {
+            let _ = Box::from_raw(node2);
+        }
 
         let node3 = list.pop_front().unwrap();
         assert_eq!(unsafe { (*node3).data }, 3);
-        unsafe { let _ = Box::from_raw(node3); }
+        unsafe {
+            let _ = Box::from_raw(node3);
+        }
 
         assert_eq!(list.pop_front(), None);
         assert!(list.is_empty());
