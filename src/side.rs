@@ -26,6 +26,38 @@ impl<O: OrderInterface> Side<O> {
         self.levels.is_empty()
     }
 
+    /// Returns the best price level (price, total_quantity).
+    /// For bids: highest price. For asks: lowest price.
+    #[inline]
+    pub fn best(&self) -> Option<(O::N, O::N)> {
+        let level = if self.is_bid {
+            self.levels.last_key_value().map(|(_, l)| l)
+        } else {
+            self.levels.first_key_value().map(|(_, l)| l)
+        };
+        level.map(|l| (l.price(), l.total_quantity()))
+    }
+
+    /// Returns the top `n` price levels as (price, total_quantity).
+    /// For bids: highest prices first. For asks: lowest prices first.
+    #[inline]
+    pub fn top(&self, n: usize) -> Vec<(O::N, O::N)> {
+        if self.is_bid {
+            self.levels
+                .iter()
+                .rev()
+                .take(n)
+                .map(|(_, l)| (l.price(), l.total_quantity()))
+                .collect()
+        } else {
+            self.levels
+                .iter()
+                .take(n)
+                .map(|(_, l)| (l.price(), l.total_quantity()))
+                .collect()
+        }
+    }
+
     #[inline(always)]
     pub fn insert_order(&mut self, order: O) -> *mut Node<O> {
         let price = order.price();

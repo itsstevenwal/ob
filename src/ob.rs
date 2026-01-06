@@ -51,6 +51,82 @@ pub struct Match<O: OrderInterface> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 impl<O: OrderInterface> OrderBook<O> {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Getters
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Returns an iterator over all bid orders, highest price first.
+    #[inline]
+    pub fn bids(&self) -> impl Iterator<Item = &O> {
+        self.bids.iter()
+    }
+
+    /// Returns an iterator over all ask orders, lowest price first.
+    #[inline]
+    pub fn asks(&self) -> impl Iterator<Item = &O> {
+        self.asks.iter()
+    }
+
+    /// Returns the best (highest) bid as (price, total_quantity), if any.
+    #[inline]
+    pub fn best_bid(&self) -> Option<(O::N, O::N)> {
+        self.bids.best()
+    }
+
+    /// Returns the best (lowest) ask as (price, total_quantity), if any.
+    #[inline]
+    pub fn best_ask(&self) -> Option<(O::N, O::N)> {
+        self.asks.best()
+    }
+
+    /// Returns the top `n` bid levels as (price, total_quantity), highest price first.
+    #[inline]
+    pub fn top_bids(&self, n: usize) -> Vec<(O::N, O::N)> {
+        self.bids.top(n)
+    }
+
+    /// Returns the top `n` ask levels as (price, total_quantity), lowest price first.
+    #[inline]
+    pub fn top_asks(&self, n: usize) -> Vec<(O::N, O::N)> {
+        self.asks.top(n)
+    }
+
+    /// Returns the number of price levels on the bid side.
+    #[inline]
+    pub fn bid_depth(&self) -> usize {
+        self.bids.height()
+    }
+
+    /// Returns the number of price levels on the ask side.
+    #[inline]
+    pub fn ask_depth(&self) -> usize {
+        self.asks.height()
+    }
+
+    /// Returns the total number of orders in the book.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.orders.len()
+    }
+
+    /// Returns true if the orderbook has no orders.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.orders.is_empty()
+    }
+
+    /// Returns a reference to the order with the given ID, if it exists.
+    #[inline]
+    pub fn order(&self, order_id: &O::T) -> Option<&O> {
+        self.orders
+            .get(order_id)
+            .map(|&ptr| unsafe { &(*ptr).data })
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Internal helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
     #[inline(always)]
     fn side_mut(&mut self, is_buy: bool) -> &mut Side<O> {
         if is_buy {
