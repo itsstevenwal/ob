@@ -30,7 +30,7 @@ impl<O: OrderInterface> Default for OrderBook<O> {
 
 /// An operation to apply to the orderbook
 /// There are two types of operations: insert and delete
-enum Op<O: OrderInterface> {
+pub enum Op<O: OrderInterface> {
     Insert(O),
     Delete(O::T),
 }
@@ -40,7 +40,8 @@ enum Op<O: OrderInterface> {
 /// Insert: The order was inserted into the orderbook
 /// Match: The order was matched with other orders
 /// Delete: The order was deleted from the orderbook
-enum Result<O: OrderInterface> {
+#[allow(dead_code)]
+pub enum EvalResult<O: OrderInterface> {
     Insert(O, O::N),
     Match(O, O::N, Vec<(O::T, O::N)>), // Taker, Quantity, Makers
     Delete(O::T),
@@ -48,12 +49,12 @@ enum Result<O: OrderInterface> {
 }
 
 /// A message to indicate an error
-enum Msg {
-    OrderNotFound(),
-    OrderAlreadyExists(),
+pub enum Msg {
+    OrderNotFound,
+    OrderAlreadyExists,
 }
 
-enum Instruction<O: OrderInterface> {
+pub enum Instruction<O: OrderInterface> {
     Insert(O, O::N),  // Order, Remaining Quantity
     Delete(O::T),     // Order ID
     Fill(O::T, O::N), // Order ID, Quantity
@@ -97,7 +98,7 @@ impl<O: OrderInterface> OrderBook<O> {
 
     pub fn eval_insert(&mut self, order: O) -> (Option<Match<O>>, Vec<Instruction<O>>) {
         if self.orders.contains_key(order.id()) {
-            return (None, vec![Instruction::NoOp(Msg::OrderAlreadyExists())]);
+            return (None, vec![Instruction::NoOp(Msg::OrderAlreadyExists)]);
         }
 
         let mut remaining_quantity = order.remaining();
@@ -174,7 +175,7 @@ impl<O: OrderInterface> OrderBook<O> {
 
     pub fn eval_cancel(&mut self, order_id: O::T) -> Instruction<O> {
         if !self.orders.contains_key(&order_id) {
-            return Instruction::NoOp(Msg::OrderNotFound());
+            return Instruction::NoOp(Msg::OrderNotFound);
         }
 
         self.temp.insert(order_id.clone(), O::N::default());

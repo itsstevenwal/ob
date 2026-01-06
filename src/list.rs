@@ -90,7 +90,10 @@ impl<T> List<T> {
 
     /// Removes the node at the given pointer from the list
     /// Returns the data from the removed node, or None if the pointer is null
-    /// Note: The caller must ensure the pointer is valid and points to a node in this list
+    ///
+    /// # Safety
+    /// The caller must ensure the pointer is valid and points to a node in this list
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn remove(&mut self, node_ptr: *mut Node<T>) -> Option<T> {
         if node_ptr.is_null() || self.length == 0 {
             return None;
@@ -130,7 +133,7 @@ impl<T> Default for List<T> {
 
 impl<T> Drop for List<T> {
     fn drop(&mut self) {
-        while let Some(_) = self.pop_front() {}
+        while self.pop_front().is_some() {}
     }
 }
 
@@ -193,12 +196,16 @@ impl<'a, T> Iterator for IterMut<'a, T> {
     }
 }
 
-impl<T> List<T> {
-    /// Consumes the list and returns an iterator over its elements
-    pub fn into_iter(self) -> IntoIter<T> {
+impl<T> IntoIterator for List<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
         IntoIter(self)
     }
+}
 
+impl<T> List<T> {
     /// Returns an iterator over the list that borrows the list
     pub fn iter(&self) -> Iter<'_, T> {
         Iter {

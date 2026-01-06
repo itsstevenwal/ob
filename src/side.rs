@@ -34,8 +34,7 @@ impl<O: OrderInterface> Side<O> {
     pub fn insert_order(&mut self, order: O) -> *mut Node<O> {
         let price = order.price();
         if let Some(level) = self.levels.get_mut(&price) {
-            let node_ptr = level.add_order(order);
-            node_ptr
+            level.add_order(order)
         } else {
             let mut level = Level::new(price);
             let node_ptr = level.add_order(order);
@@ -44,6 +43,11 @@ impl<O: OrderInterface> Side<O> {
         }
     }
 
+    /// Fills an order and returns true if fully filled
+    ///
+    /// # Safety
+    /// The caller must ensure node_ptr is valid and points to a node in this side
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn fill_order(&mut self, node_ptr: *mut Node<O>, fill: O::N) -> bool {
         let order = unsafe { &mut (*node_ptr).data };
         let price = order.price();
@@ -62,6 +66,11 @@ impl<O: OrderInterface> Side<O> {
         removed
     }
 
+    /// Removes an order by its node pointer
+    ///
+    /// # Safety
+    /// The caller must ensure node_ptr is valid and points to a node in this side
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn remove_order(&mut self, node_ptr: *mut Node<O>) {
         let price = unsafe { (*node_ptr).data.price() };
 

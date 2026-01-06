@@ -25,7 +25,7 @@ pub trait OrderInterface {
         + MulAssign
         + DivAssign;
 
-    fn id<'a>(&'a self) -> &'a Self::T;
+    fn id(&self) -> &Self::T;
 
     fn is_buy(&self) -> bool;
 
@@ -72,7 +72,7 @@ impl OrderInterface for TestOrder {
     type T = String;
     type N = u64;
 
-    fn id<'a>(&'a self) -> &'a String {
+    fn id(&self) -> &String {
         &self.id
     }
 
