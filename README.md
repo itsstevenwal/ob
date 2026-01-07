@@ -65,5 +65,5 @@ ob.apply(instructions);
 
 ## license
 
-MIT
+Apache-2.0 or MIT
 
