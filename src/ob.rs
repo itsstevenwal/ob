@@ -1,12 +1,11 @@
-use crate::{list::Node, order::OrderInterface, side::Side};
-use std::collections::HashMap;
+use crate::{hash::FxHashMap, list::Node, order::OrderInterface, side::Side};
 
 /// A complete orderbook with bid and ask sides.
 pub struct OrderBook<O: OrderInterface> {
     bids: Side<O>,
     asks: Side<O>,
-    orders: HashMap<O::T, *mut Node<O>>,
-    temp: HashMap<O::T, O::N>, // Temporary remaining quantities
+    orders: FxHashMap<O::T, *mut Node<O>>,
+    temp: FxHashMap<O::T, O::N>,
 }
 
 impl<O: OrderInterface> Default for OrderBook<O> {
@@ -14,8 +13,8 @@ impl<O: OrderInterface> Default for OrderBook<O> {
         Self {
             bids: Side::new(true),
             asks: Side::new(false),
-            orders: HashMap::default(),
-            temp: HashMap::default(),
+            orders: FxHashMap::default(),
+            temp: FxHashMap::default(),
         }
     }
 }
@@ -55,15 +54,15 @@ impl<O: OrderInterface> OrderBook<O> {
     // Getters
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// Returns an iterator over all bid orders, highest price first.
+    /// Returns an iterator over all bid levels, highest price first.
     #[inline]
-    pub fn bids(&self) -> impl Iterator<Item = &O> {
+    pub fn bids(&self) -> impl Iterator<Item = &crate::level::Level<O>> {
         self.bids.iter()
     }
 
-    /// Returns an iterator over all ask orders, lowest price first.
+    /// Returns an iterator over all ask levels, lowest price first.
     #[inline]
-    pub fn asks(&self) -> impl Iterator<Item = &O> {
+    pub fn asks(&self) -> impl Iterator<Item = &crate::level::Level<O>> {
         self.asks.iter()
     }
 
@@ -178,7 +177,8 @@ impl<O: OrderInterface> OrderBook<O> {
             return;
         };
         let is_buy = unsafe { (*node_ptr).data.is_buy() };
-        if self.side_mut(is_buy).fill_order(node_ptr, quantity) {
+        let removed = self.side_mut(is_buy).fill_order(node_ptr, quantity);
+        if removed {
             self.orders.remove(order_id);
         }
     }
@@ -214,30 +214,34 @@ impl<O: OrderInterface> OrderBook<O> {
         let mut instructions = Vec::with_capacity(16);
         let is_buy = order.is_buy();
         let price = order.price();
-        let opposite_book = if is_buy {
+
+        let opposite_side = if is_buy {
             &mut self.asks
         } else {
             &mut self.bids
         };
 
-        for resting_order in opposite_book.iter_mut() {
-            let price_matches = if is_buy {
-                price >= resting_order.price()
+        'outer: for level in opposite_side.iter_mut() {
+            let dominated = if is_buy {
+                price < level.price()
             } else {
-                price <= resting_order.price()
+                price > level.price()
             };
-
-            if price_matches && remaining_quantity > O::N::default() {
+            if dominated {
+                break;
+            }
+            for resting_order in level.iter_mut() {
+                if remaining_quantity == O::N::default() {
+                    break 'outer;
+                }
                 let remaining = self
                     .temp
                     .get(resting_order.id())
                     .copied()
                     .unwrap_or_else(|| resting_order.remaining());
-
                 if remaining == O::N::default() {
                     continue;
                 }
-
                 let taken_quantity = remaining_quantity.min(remaining);
                 remaining_quantity -= taken_quantity;
                 taker_quantity += taken_quantity;
@@ -248,8 +252,6 @@ impl<O: OrderInterface> OrderBook<O> {
                 maker_quantities.push((resting_order.id().clone(), taken_quantity));
                 self.temp
                     .insert(resting_order.id().clone(), remaining - taken_quantity);
-            } else {
-                break;
             }
         }
 
@@ -299,11 +301,7 @@ mod tests {
 
     fn setup_order(ob: &mut OrderBook<TestOrder>, id: &str, is_buy: bool, price: u64, qty: u64) {
         let order = TestOrder::new(id, is_buy, price, qty);
-        let node_ptr = if is_buy {
-            ob.bids.insert_order(order)
-        } else {
-            ob.asks.insert_order(order)
-        };
+        let node_ptr = ob.side_mut(is_buy).insert_order(order);
         ob.orders.insert(String::from(id), node_ptr);
     }
 
@@ -609,7 +607,7 @@ mod tests {
             TestOrder::new("1", true, 1000, 100),
             70,
         )]);
-        assert_eq!(ob.bids.iter().next().unwrap().remaining(), 70);
+        assert_eq!(ob.order(&String::from("1")).unwrap().remaining(), 70);
     }
 
     #[test]
@@ -635,7 +633,7 @@ mod tests {
         let mut ob = OrderBook::<TestOrder>::default();
         setup_order(&mut ob, "1", false, 1000, 100);
         ob.apply(vec![Instruction::Fill(String::from("1"), 30)]);
-        assert_eq!(ob.asks.iter().next().unwrap().remaining(), 70);
+        assert_eq!(ob.order(&String::from("1")).unwrap().remaining(), 70);
 
         // Complete fill sell
         let mut ob = OrderBook::<TestOrder>::default();
@@ -647,7 +645,7 @@ mod tests {
         let mut ob = OrderBook::<TestOrder>::default();
         setup_order(&mut ob, "1", true, 1000, 100);
         ob.apply(vec![Instruction::Fill(String::from("1"), 30)]);
-        assert_eq!(ob.bids.iter().next().unwrap().remaining(), 70);
+        assert_eq!(ob.order(&String::from("1")).unwrap().remaining(), 70);
 
         // Complete fill buy
         let mut ob = OrderBook::<TestOrder>::default();
@@ -690,7 +688,7 @@ mod tests {
         let (matches, instructions) = ob.eval(ops);
         assert_eq!(matches[0].taker.1, 60);
         ob.apply(instructions);
-        assert_eq!(ob.asks.iter().next().unwrap().remaining(), 40);
+        assert_eq!(ob.order(&String::from("s1")).unwrap().remaining(), 40);
         assert!(!ob.orders.contains_key("b1"));
     }
 
@@ -702,6 +700,6 @@ mod tests {
         let (_, instructions) = ob.eval(ops);
         ob.apply(instructions);
         assert!(ob.asks.is_empty());
-        assert_eq!(ob.bids.iter().next().unwrap().remaining(), 50);
+        assert_eq!(ob.order(&String::from("b1")).unwrap().remaining(), 50);
     }
 }

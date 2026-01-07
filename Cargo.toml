@@ -2,12 +2,17 @@
 name = "ob"
 version = "0.1.0"
 edition = "2024"
+authors = ["itsstevenwal"]
+description = "A single threaded, zero dependency price-time priority limit orderbook implementation in Rust."
+license = "Apache-2.0 OR MIT"
+readme = "README.md"
+keywords = ["orderbook", "order-book", "ob", "limit-order-book"]
+repository = "https://github.com/itsstevenwal/ob"
 
 [dependencies]
 
 [dev-dependencies]
 criterion = "0.5"
-rand = "0.8"
 
 [[bench]]
 name = "bench"

@@ -11,6 +11,7 @@ pub trait OrderInterface {
     type N: Ord
         + Eq
         + Copy
+        + Hash
         + Default
         + Display
         + Add<Output = Self::N>

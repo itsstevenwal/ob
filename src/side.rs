@@ -1,10 +1,12 @@
-use crate::{level::Level, list::Node, order::OrderInterface};
-use std::collections::{BTreeMap, btree_map};
+use crate::{hash::FxHashMap, level::Level, list::Node, order::OrderInterface};
+use std::collections::BTreeSet;
 
 /// One side of an orderbook (bids or asks). Uses BTreeMap for price-sorted levels.
+/// `is_bid` determines iteration direction at runtime.
 pub struct Side<O: OrderInterface> {
     is_bid: bool,
-    levels: BTreeMap<O::N, Level<O>>,
+    prices: BTreeSet<O::N>,
+    levels: FxHashMap<O::N, Level<O>>,
 }
 
 impl<O: OrderInterface> Side<O> {
@@ -12,7 +14,8 @@ impl<O: OrderInterface> Side<O> {
     pub fn new(is_bid: bool) -> Self {
         Side {
             is_bid,
-            levels: BTreeMap::new(),
+            prices: BTreeSet::new(),
+            levels: FxHashMap::default(),
         }
     }
 
@@ -30,32 +33,25 @@ impl<O: OrderInterface> Side<O> {
     /// For bids: highest price. For asks: lowest price.
     #[inline]
     pub fn best(&self) -> Option<(O::N, O::N)> {
-        let level = if self.is_bid {
-            self.levels.last_key_value().map(|(_, l)| l)
+        let price = if self.is_bid {
+            self.prices.last()
         } else {
-            self.levels.first_key_value().map(|(_, l)| l)
+            self.prices.first()
         };
-        level.map(|l| (l.price(), l.total_quantity()))
+        price.map(|p| {
+            let level = self.levels.get(p).unwrap();
+            (*p, level.total_quantity())
+        })
     }
 
     /// Returns the top `n` price levels as (price, total_quantity).
     /// For bids: highest prices first. For asks: lowest prices first.
     #[inline]
     pub fn top(&self, n: usize) -> Vec<(O::N, O::N)> {
-        if self.is_bid {
-            self.levels
-                .iter()
-                .rev()
-                .take(n)
-                .map(|(_, l)| (l.price(), l.total_quantity()))
-                .collect()
-        } else {
-            self.levels
-                .iter()
-                .take(n)
-                .map(|(_, l)| (l.price(), l.total_quantity()))
-                .collect()
-        }
+        self.iter()
+            .take(n)
+            .map(|l| (l.price(), l.total_quantity()))
+            .collect()
     }
 
     #[inline(always)]
@@ -66,6 +62,7 @@ impl<O: OrderInterface> Side<O> {
         } else {
             let mut level = Level::new(price);
             let node_ptr = level.add_order(order);
+            self.prices.insert(price);
             self.levels.insert(price, level);
             node_ptr
         }
@@ -81,6 +78,7 @@ impl<O: OrderInterface> Side<O> {
     #[inline(always)]
     fn cleanup_level(&mut self, price: O::N, level_empty: bool) {
         if level_empty {
+            self.prices.remove(&price);
             self.levels.remove(&price);
         }
     }
@@ -113,130 +111,73 @@ impl<O: OrderInterface> Side<O> {
 
     /// Bids: highest price first. Asks: lowest price first.
     #[inline]
-    pub fn iter(&self) -> OrderIter<'_, O> {
-        if self.is_bid {
-            OrderIter::Rev(OrderIterRev {
-                levels_iter: self.levels.iter().rev(),
-                current_order_iter: None,
-            })
-        } else {
-            OrderIter::Fwd(OrderIterFwd {
-                levels_iter: self.levels.iter(),
-                current_order_iter: None,
-            })
+    pub fn iter(&self) -> LevelIter<'_, O> {
+        LevelIter {
+            is_bid: self.is_bid,
+            prices_iter: self.prices.iter(),
+            levels: &self.levels,
         }
     }
 
     /// Bids: highest price first. Asks: lowest price first.
     #[inline]
-    pub fn iter_mut(&mut self) -> OrderIterMut<'_, O> {
-        if self.is_bid {
-            OrderIterMut::Rev(OrderIterMutRev {
-                levels_iter: self.levels.iter_mut().rev(),
-                current_order_iter: None,
-            })
+    pub fn iter_mut(&mut self) -> LevelIterMut<'_, O> {
+        LevelIterMut {
+            is_bid: self.is_bid,
+            prices_iter: self.prices.iter(),
+            levels: &mut self.levels,
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Iterators
+// ─────────────────────────────────────────────────────────────────────────────
+
+use std::collections::btree_set;
+
+pub struct LevelIter<'a, O: OrderInterface> {
+    is_bid: bool,
+    prices_iter: btree_set::Iter<'a, O::N>,
+    levels: &'a FxHashMap<O::N, Level<O>>,
+}
+
+impl<'a, O: OrderInterface> Iterator for LevelIter<'a, O> {
+    type Item = &'a Level<O>;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        let price = if self.is_bid {
+            self.prices_iter.next_back()
         } else {
-            OrderIterMut::Fwd(OrderIterMutFwd {
-                levels_iter: self.levels.iter_mut(),
-                current_order_iter: None,
-            })
-        }
+            self.prices_iter.next()
+        };
+        price.map(|p| self.levels.get(p).unwrap())
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Iterators (macro to reduce duplication)
-// ─────────────────────────────────────────────────────────────────────────────
-
-macro_rules! impl_level_iter {
-    ($name:ident, $levels_iter:ty, $order_iter:ty, $item:ty, $iter_method:ident) => {
-        pub struct $name<'a, O: OrderInterface> {
-            levels_iter: $levels_iter,
-            current_order_iter: Option<$order_iter>,
-        }
-
-        impl<'a, O: OrderInterface> Iterator for $name<'a, O> {
-            type Item = $item;
-
-            #[inline(always)]
-            fn next(&mut self) -> Option<Self::Item> {
-                loop {
-                    if let Some(ref mut order_iter) = self.current_order_iter {
-                        if let Some(order) = order_iter.next() {
-                            return Some(order);
-                        }
-                    }
-                    self.current_order_iter = None;
-                    match self.levels_iter.next() {
-                        Some((_, level)) => self.current_order_iter = Some(level.$iter_method()),
-                        None => return None,
-                    }
-                }
-            }
-        }
-    };
+pub struct LevelIterMut<'a, O: OrderInterface> {
+    is_bid: bool,
+    prices_iter: btree_set::Iter<'a, O::N>,
+    levels: &'a mut FxHashMap<O::N, Level<O>>,
 }
 
-impl_level_iter!(
-    OrderIterFwd,
-    btree_map::Iter<'a, O::N, Level<O>>,
-    crate::list::Iter<'a, O>,
-    &'a O,
-    iter
-);
-impl_level_iter!(
-    OrderIterRev,
-    std::iter::Rev<btree_map::Iter<'a, O::N, Level<O>>>,
-    crate::list::Iter<'a, O>,
-    &'a O,
-    iter
-);
-impl_level_iter!(
-    OrderIterMutFwd,
-    btree_map::IterMut<'a, O::N, Level<O>>,
-    crate::list::IterMut<'a, O>,
-    &'a mut O,
-    iter_mut
-);
-impl_level_iter!(
-    OrderIterMutRev,
-    std::iter::Rev<btree_map::IterMut<'a, O::N, Level<O>>>,
-    crate::list::IterMut<'a, O>,
-    &'a mut O,
-    iter_mut
-);
-
-pub enum OrderIter<'a, O: OrderInterface> {
-    Fwd(OrderIterFwd<'a, O>),
-    Rev(OrderIterRev<'a, O>),
-}
-
-pub enum OrderIterMut<'a, O: OrderInterface> {
-    Fwd(OrderIterMutFwd<'a, O>),
-    Rev(OrderIterMutRev<'a, O>),
-}
-
-impl<'a, O: OrderInterface> Iterator for OrderIter<'a, O> {
-    type Item = &'a O;
+impl<'a, O: OrderInterface> Iterator for LevelIterMut<'a, O> {
+    type Item = &'a mut Level<O>;
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            OrderIter::Fwd(iter) => iter.next(),
-            OrderIter::Rev(iter) => iter.next(),
-        }
-    }
-}
-
-impl<'a, O: OrderInterface> Iterator for OrderIterMut<'a, O> {
-    type Item = &'a mut O;
-
-    #[inline(always)]
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            OrderIterMut::Fwd(iter) => iter.next(),
-            OrderIterMut::Rev(iter) => iter.next(),
-        }
+        let price = if self.is_bid {
+            self.prices_iter.next_back()
+        } else {
+            self.prices_iter.next()
+        };
+        price.map(|p| {
+            let level = self.levels.get_mut(p).unwrap();
+            // SAFETY: We iterate through each price exactly once, so we never
+            // create overlapping mutable references to the same level.
+            unsafe { &mut *(level as *mut Level<O>) }
+        })
     }
 }
 
@@ -291,8 +232,8 @@ mod tests {
         let mut side = Side::<TestOrder>::new(true);
         let node_ptr = side.insert_order(TestOrder::new("1", true, 100, 50));
         side.remove_order(node_ptr);
-        let order_count: usize = side.iter().count();
-        assert_eq!(order_count, 0);
+        let level_count: usize = side.iter().count();
+        assert_eq!(level_count, 0);
     }
 
     #[test]
@@ -301,7 +242,7 @@ mod tests {
         side.insert_order(TestOrder::new("1", true, 100, 50));
         side.insert_order(TestOrder::new("2", true, 300, 30));
         side.insert_order(TestOrder::new("3", true, 200, 20));
-        let prices: Vec<u64> = side.iter().map(|order| order.price()).collect();
+        let prices: Vec<u64> = side.iter().map(|level| level.price()).collect();
         assert_eq!(prices, vec![300, 200, 100]);
     }
 
@@ -311,7 +252,7 @@ mod tests {
         side.insert_order(TestOrder::new("1", false, 100, 50));
         side.insert_order(TestOrder::new("2", false, 300, 30));
         side.insert_order(TestOrder::new("3", false, 200, 20));
-        let prices: Vec<u64> = side.iter().map(|order| order.price()).collect();
+        let prices: Vec<u64> = side.iter().map(|level| level.price()).collect();
         assert_eq!(prices, vec![100, 200, 300]);
     }
 
@@ -320,8 +261,8 @@ mod tests {
         let mut side = Side::<TestOrder>::new(true);
         side.insert_order(TestOrder::new("1", true, 100, 50));
         side.insert_order(TestOrder::new("2", true, 200, 30));
-        for order in side.iter_mut() {
-            let _ = order.price();
+        for level in side.iter_mut() {
+            let _ = level.price();
         }
         assert_eq!(side.height(), 2);
     }

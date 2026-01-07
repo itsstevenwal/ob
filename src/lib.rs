@@ -1,3 +1,4 @@
+mod hash;
 mod level;
 mod list;
 mod order;
