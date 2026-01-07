@@ -130,4 +130,48 @@ mod tests {
         assert_eq!(level.total_quantity(), 50);
         assert_eq!(level.len(), 1);
     }
+
+    #[test]
+    fn test_iter() {
+        let mut level = Level::<TestOrder>::new(100);
+        level.add_order(TestOrder::new("1", true, 100, 50));
+        level.add_order(TestOrder::new("2", true, 100, 30));
+        level.add_order(TestOrder::new("3", true, 100, 20));
+
+        let ids: Vec<&String> = level.iter().map(|o| o.id()).collect();
+        assert_eq!(ids, vec!["1", "2", "3"]);
+    }
+
+    #[test]
+    fn test_iter_mut() {
+        let mut level = Level::<TestOrder>::new(100);
+        level.add_order(TestOrder::new("1", true, 100, 50));
+        level.add_order(TestOrder::new("2", true, 100, 30));
+
+        let count = level.iter_mut().count();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_fill_order_partial() {
+        let mut level = Level::<TestOrder>::new(100);
+        let node_ptr = level.add_order(TestOrder::new("1", true, 100, 100));
+        let order = unsafe { &mut (*node_ptr).data };
+        let removed = level.fill_order(node_ptr, order, 30);
+        assert!(!removed);
+        assert_eq!(level.total_quantity(), 70);
+        assert_eq!(level.len(), 1);
+    }
+
+    #[test]
+    fn test_fill_order_complete() {
+        let mut level = Level::<TestOrder>::new(100);
+        let node_ptr = level.add_order(TestOrder::new("1", true, 100, 100));
+        let order = unsafe { &mut (*node_ptr).data };
+        let removed = level.fill_order(node_ptr, order, 100);
+        assert!(removed);
+        assert_eq!(level.total_quantity(), 0);
+        assert_eq!(level.len(), 0);
+        assert!(level.is_empty());
+    }
 }

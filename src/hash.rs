@@ -100,58 +100,57 @@ const SEED1: u64 = 0x243f6a8885a308d3;
 const SEED2: u64 = 0x13198a2e03707344;
 const PREVENT_TRIVIAL_ZERO_COLLAPSE: u64 = 0xa4093822299f31d0;
 
+/// 64-bit multiply mix using native 128-bit multiplication.
+#[cfg(any(
+    all(
+        target_pointer_width = "64",
+        not(any(target_arch = "sparc64", target_arch = "wasm64")),
+    ),
+    target_arch = "aarch64",
+    target_arch = "x86_64",
+    all(target_family = "wasm", target_feature = "wide-arithmetic"),
+))]
 #[inline]
 fn multiply_mix(x: u64, y: u64) -> u64 {
-    // The following code path is only fast if 64-bit to 128-bit widening
-    // multiplication is supported by the architecture. Most 64-bit
-    // architectures except SPARC64 and Wasm64 support it. However, the target
-    // pointer width doesn't always indicate that we are dealing with a 64-bit
-    // architecture, as there are ABIs that reduce the pointer width, especially
-    // on AArch64 and x86-64. WebAssembly (regardless of pointer width) supports
-    // 64-bit to 128-bit widening multiplication with the `wide-arithmetic`
-    // proposal.
-    if cfg!(any(
-        all(
-            target_pointer_width = "64",
-            not(any(target_arch = "sparc64", target_arch = "wasm64")),
-        ),
-        target_arch = "aarch64",
-        target_arch = "x86_64",
-        all(target_family = "wasm", target_feature = "wide-arithmetic"),
-    )) {
-        // We compute the full u64 x u64 -> u128 product, this is a single mul
-        // instruction on x86-64, one mul plus one mulhi on ARM64.
-        let full = (x as u128).wrapping_mul(y as u128);
-        let lo = full as u64;
-        let hi = (full >> 64) as u64;
+    // We compute the full u64 x u64 -> u128 product, this is a single mul
+    // instruction on x86-64, one mul plus one mulhi on ARM64.
+    let full = (x as u128).wrapping_mul(y as u128);
+    let lo = full as u64;
+    let hi = (full >> 64) as u64;
 
-        // The middle bits of the full product fluctuate the most with small
-        // changes in the input. This is the top bits of lo and the bottom bits
-        // of hi. We can thus make the entire output fluctuate with small
-        // changes to the input by XOR'ing these two halves.
-        lo ^ hi
+    // The middle bits of the full product fluctuate the most with small
+    // changes in the input. This is the top bits of lo and the bottom bits
+    // of hi. We can thus make the entire output fluctuate with small
+    // changes to the input by XOR'ing these two halves.
+    lo ^ hi
+}
 
-        // Unfortunately both 2^64 + 1 and 2^64 - 1 have small prime factors,
-        // otherwise combining with + or - could result in a really strong hash, as:
-        //     x * y = 2^64 * hi + lo = (-1) * hi + lo = lo - hi,   (mod 2^64 + 1)
-        //     x * y = 2^64 * hi + lo =    1 * hi + lo = lo + hi,   (mod 2^64 - 1)
-        // Multiplicative hashing is universal in a field (like mod p).
-    } else {
-        // u64 x u64 -> u128 product is prohibitively expensive on 32-bit.
-        // Decompose into 32-bit parts.
-        let lx = x as u32;
-        let ly = y as u32;
-        let hx = (x >> 32) as u32;
-        let hy = (y >> 32) as u32;
+/// 32-bit fallback multiply mix using decomposed multiplication.
+#[cfg(not(any(
+    all(
+        target_pointer_width = "64",
+        not(any(target_arch = "sparc64", target_arch = "wasm64")),
+    ),
+    target_arch = "aarch64",
+    target_arch = "x86_64",
+    all(target_family = "wasm", target_feature = "wide-arithmetic"),
+)))]
+#[inline]
+fn multiply_mix(x: u64, y: u64) -> u64 {
+    // u64 x u64 -> u128 product is prohibitively expensive on 32-bit.
+    // Decompose into 32-bit parts.
+    let lx = x as u32;
+    let ly = y as u32;
+    let hx = (x >> 32) as u32;
+    let hy = (y >> 32) as u32;
 
-        // u32 x u32 -> u64 the low bits of one with the high bits of the other.
-        let afull = (lx as u64).wrapping_mul(hy as u64);
-        let bfull = (hx as u64).wrapping_mul(ly as u64);
+    // u32 x u32 -> u64 the low bits of one with the high bits of the other.
+    let afull = (lx as u64).wrapping_mul(hy as u64);
+    let bfull = (hx as u64).wrapping_mul(ly as u64);
 
-        // Combine, swapping low/high of one of them so the upper bits of the
-        // product of one combine with the lower bits of the other.
-        afull ^ bfull.rotate_right(32)
-    }
+    // Combine, swapping low/high of one of them so the upper bits of the
+    // product of one combine with the lower bits of the other.
+    afull ^ bfull.rotate_right(32)
 }
 
 /// A wyhash-inspired non-collision-resistant hash for strings/slices designed
@@ -220,5 +219,163 @@ impl BuildHasher for FxBuildHasher {
     type Hasher = FxHasher;
     fn build_hasher(&self) -> FxHasher {
         FxHasher::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::hash::Hash;
+
+    #[test]
+    fn test_fx_hasher_default() {
+        let hasher = FxHasher::default();
+        assert_eq!(hasher.hash, 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_write_u8() {
+        let mut hasher = FxHasher::default();
+        hasher.write_u8(42);
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_write_u16() {
+        let mut hasher = FxHasher::default();
+        hasher.write_u16(1234);
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_write_u32() {
+        let mut hasher = FxHasher::default();
+        hasher.write_u32(123456);
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_write_u64() {
+        let mut hasher = FxHasher::default();
+        hasher.write_u64(12345678901234);
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_write_u128() {
+        let mut hasher = FxHasher::default();
+        hasher.write_u128(12345678901234567890123456789012345678);
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_write_usize() {
+        let mut hasher = FxHasher::default();
+        hasher.write_usize(123456789);
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_write_bytes_empty() {
+        let mut hasher = FxHasher::default();
+        hasher.write(&[]);
+        let hash = hasher.finish();
+        assert_ne!(hash, 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_write_bytes_short() {
+        let mut hasher = FxHasher::default();
+        hasher.write(b"abc");
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_write_bytes_4_to_7() {
+        let mut hasher = FxHasher::default();
+        hasher.write(b"abcdef");
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_write_bytes_8_to_16() {
+        let mut hasher = FxHasher::default();
+        hasher.write(b"abcdefghijklmnop");
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_write_bytes_long() {
+        let mut hasher = FxHasher::default();
+        hasher.write(b"abcdefghijklmnopqrstuvwxyz0123456789");
+        assert_ne!(hasher.finish(), 0);
+    }
+
+    #[test]
+    fn test_fx_hasher_deterministic() {
+        let mut h1 = FxHasher::default();
+        let mut h2 = FxHasher::default();
+        h1.write(b"hello");
+        h2.write(b"hello");
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_fx_hasher_different_inputs() {
+        let mut h1 = FxHasher::default();
+        let mut h2 = FxHasher::default();
+        h1.write(b"hello");
+        h2.write(b"world");
+        assert_ne!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn test_fx_build_hasher() {
+        let builder = FxBuildHasher::default();
+        let hasher = builder.build_hasher();
+        assert_eq!(hasher.hash, 0);
+    }
+
+    #[test]
+    fn test_fx_hashmap_basic() {
+        let mut map: FxHashMap<u64, u64> = FxHashMap::default();
+        map.insert(1, 100);
+        map.insert(2, 200);
+        assert_eq!(map.get(&1), Some(&100));
+        assert_eq!(map.get(&2), Some(&200));
+        assert_eq!(map.get(&3), None);
+    }
+
+    #[test]
+    fn test_fx_hashmap_string_keys() {
+        let mut map: FxHashMap<String, i32> = FxHashMap::default();
+        map.insert("hello".to_string(), 1);
+        map.insert("world".to_string(), 2);
+        assert_eq!(map.get("hello"), Some(&1));
+        assert_eq!(map.get("world"), Some(&2));
+    }
+
+    #[test]
+    fn test_hash_bytes_various_lengths() {
+        // Test various byte lengths to hit different code paths
+        for len in 0..=32 {
+            let bytes: Vec<u8> = (0..len).map(|i| i as u8).collect();
+            let hash = hash_bytes(&bytes);
+            // Just verify it doesn't panic and produces some output
+            let _ = hash;
+        }
+    }
+
+    #[test]
+    fn test_multiply_mix() {
+        let result = multiply_mix(123456789, 987654321);
+        assert_ne!(result, 0);
+    }
+
+    #[test]
+    fn test_hash_type_through_hasher() {
+        let mut hasher = FxHasher::default();
+        42u64.hash(&mut hasher);
+        assert_ne!(hasher.finish(), 0);
     }
 }
