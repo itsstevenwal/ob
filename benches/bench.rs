@@ -1,6 +1,6 @@
 use criterion::{BatchSize, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use ob::OrderInterface;
-use ob::ob::OrderBook;
+use obcore::OrderBook;
+use obcore::OrderInterface;
 
 /// Order type for benchmarks
 #[derive(Default, Debug, PartialEq, Eq, Clone)]

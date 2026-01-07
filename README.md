@@ -1,4 +1,4 @@
-# ob
+# obcore
 
 A single threaded, zero dependency price-time priority orderbook implementation in Rust.
 
@@ -30,7 +30,7 @@ The orderbook separates state evaluation from state mutation:
 Implement the `OrderInterface` trait for your order type:
 
 ```rust
-use ob::{OrderInterface, ob::OrderBook, ob::Op};
+use obcore::{OrderInterface, OrderBook, Op};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct MyOrder {

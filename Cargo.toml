@@ -1,13 +1,13 @@
 [package]
-name = "ob"
+name = "obcore"
 version = "0.1.0"
 edition = "2024"
 authors = ["itsstevenwal"]
 description = "A single threaded, zero dependency price-time priority limit orderbook implementation in Rust."
 license = "Apache-2.0 OR MIT"
 readme = "README.md"
-keywords = ["orderbook", "order-book", "ob", "limit-order-book"]
-repository = "https://github.com/itsstevenwal/ob"
+keywords = ["order", "hft", "ob", "limit", "orderbook"]
+repository = "https://github.com/itsstevenwal/obcore"
 
 [dependencies]
 
